@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 class Policy(ABC):
 
     @abstractmethod
-    def mount(self) -> None:
+    def mount(self, timeout: float = None) -> None:
         pass
 
     @abstractmethod

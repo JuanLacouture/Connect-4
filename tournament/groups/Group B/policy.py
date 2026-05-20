@@ -2,7 +2,6 @@ import math
 import time
 import numpy as np
 from connect4.policy import Policy
-from typing import override
 
 # === Variables de configuración del curso (rúbrica criterio 2) ===
 MCTS_SIMULATIONS = 3000
@@ -104,11 +103,9 @@ class MCTSPolicy(Policy):
     def __init__(self) -> None:
         self.rng = np.random.default_rng(_SEED)
 
-    @override
-    def mount(self) -> None:
+    def mount(self, timeout: float = None) -> None:
         pass
 
-    @override
     def act(self, s: np.ndarray) -> int:
         board = s.copy()
         me = _infer_me(board)

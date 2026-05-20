@@ -1,7 +1,6 @@
 import time
 import numpy as np
 from connect4.policy import Policy
-from typing import override
 
 # === Variable de configuración del curso (rúbrica criterio 2) ===
 # Profundidad de búsqueda minimax. 5 vence al aleatorio ~100%; 6-7 más fuerte
@@ -151,11 +150,9 @@ def _minimax(b, depth, alpha, beta, maximizing, me, lr, lc, lp):
 
 class MinimaxPolicy(Policy):
 
-    @override
-    def mount(self) -> None:
+    def mount(self, timeout: float = None) -> None:
         pass
 
-    @override
     def act(self, s: np.ndarray) -> int:
         board = s.copy()
         me = _infer_me(board)

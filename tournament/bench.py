@@ -39,7 +39,7 @@ class RandomPolicy(Policy):
     def __init__(self, seed: int):
         self.rng = np.random.default_rng(seed)
 
-    def mount(self) -> None:
+    def mount(self, timeout: float = None) -> None:
         pass
 
     def act(self, s: np.ndarray) -> int:

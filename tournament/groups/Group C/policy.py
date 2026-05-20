@@ -1,7 +1,6 @@
 import pathlib
 import numpy as np
 from connect4.policy import Policy
-from typing import override
 
 # === Variable de configuración del curso (rúbrica criterio 2) ===
 # El nº de episodios de entrenamiento se fija en train_group_c.py
@@ -161,7 +160,7 @@ class QLearningPolicy(Policy):
         self.Q: dict[tuple[int, int], np.ndarray] = {}
 
     @override
-    def mount(self) -> None:
+    def mount(self, timeout: float = None) -> None:
         self.Q = _load_qtable()
 
     @override
