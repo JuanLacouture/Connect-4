@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(python run_roundrobin.py)",
+      "Bash(python -c \"import runpy; ns = runpy.run_path\\('groups/Group B/policy.py'\\); h = ns['Hydra']\\(\\); h.mount\\(\\); import numpy as np; b = np.zeros\\(\\(6,7\\),dtype=int\\); print\\('act:', h.act\\(b\\)\\)\")"
     ]
   }
 }

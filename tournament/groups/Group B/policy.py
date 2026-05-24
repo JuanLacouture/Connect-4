@@ -1,14 +1,15 @@
 """
 Group B — Hydra
-Algorithm: Monte Carlo Tree Search + UCB1 + Heuristic Rollouts
+Algorithm: MCTS + UCB1 + Heuristic Rollouts + Persistent Tree Reuse
 
 CONTEXT.md grounding (≥60 %):
   • MCTS — 4 phases (selection/expansion/simulation/backprop) → Module 13
   • UCB1 tree policy                                          → Module 10
   • Zero-sum self-play + sign flip at each level              → Module 12
-  • Policy Improvement via online GPI                         → Module 9 / 13
+  • Policy Improvement via online GPI (tree accumulates)      → Module 9 / 13
 External (≤40 %):
-  • Heuristic rollout bias (win/block/center preference) instead of uniform random
+  • Heuristic rollout bias (win/block/center preference)
+  • Persistent tree reuse between moves within a game
 """
 
 import numpy as np
@@ -18,8 +19,8 @@ import math
 
 ROWS = 6
 COLS = 7
-C_UCB = math.sqrt(2)       # exploration constant
-TIME_LIMIT = 1.75          # seconds per move
+C_UCB = math.sqrt(2)
+TIME_LIMIT = 1.75
 
 
 # ── board helpers ─────────────────────────────────────────────────────────────
@@ -64,11 +65,11 @@ _CENTER_W = np.array([1, 2, 3, 4, 3, 2, 1], dtype=float)
 
 def _rollout(b, start_p):
     """
-    Play a game to completion using an informed default policy:
-      1. Take an immediate win if available.
-      2. Block the opponent's immediate win.
-      3. Otherwise, pick column proportional to center-preference weights.
-    Returns +1 if start_p wins, -1 if loses, 0 for draw.
+    Informed rollout:
+      1. Take immediate win.
+      2. Block opponent's immediate win.
+      3. Otherwise center-biased random.
+    Returns +1 if start_p wins, -1 if loses, 0 draw.
     """
     board = b.copy()
     p = start_p
@@ -76,57 +77,42 @@ def _rollout(b, start_p):
         valid = [c for c in range(COLS) if board[0, c] == 0]
         if not valid:
             return 0.0
-
-        # 1. Immediate win
         for col in valid:
             if _wins(_drop(board, col, p), p):
                 return 1.0 if p == start_p else -1.0
-
-        # 2. Block opponent's immediate win
         opp = -p
         block = None
         for col in valid:
             if _wins(_drop(board, col, opp), opp):
                 block = col
                 break
-
         if block is not None:
             col = block
         else:
-            # 3. Center-biased random
             w = _CENTER_W[[c for c in valid]]
             w = w / w.sum()
             col = int(np.random.choice(valid, p=w))
-
         board = _drop(board, col, p)
         if _wins(board, p):
             return 1.0 if p == start_p else -1.0
         p = -p
-
     return 0.0
 
 
 # ── MCTS node ─────────────────────────────────────────────────────────────────
 
 class _Node:
-    """
-    Each node represents a board STATE after the move that led here.
-    self.W  = sum of results from self.parent.player's perspective
-              (the player who CHOSE to visit this node via its move).
-    This ensures UCB argmax at the parent selects the best child for the parent.
-    """
     __slots__ = ('board', 'player', 'col', 'parent', 'children', 'W', 'N', 'untried')
 
     def __init__(self, board, player, col=None, parent=None):
         self.board = board
-        self.player = player      # player whose turn it is FROM this state
-        self.col = col            # column that led to this state
+        self.player = player
+        self.col = col
         self.parent = parent
         self.children = []
-        self.W = 0.0              # wins from parent's perspective
+        self.W = 0.0
         self.N = 0
         valid = [c for c in range(COLS) if board[0, c] == 0]
-        # Shuffle so expansion is in random order
         self.untried = valid[:]
         np.random.shuffle(self.untried)
 
@@ -140,15 +126,14 @@ class _Node:
 
 class Hydra(Policy):
     """
-    Full Monte Carlo Tree Search following the 4-phase algorithm from Module 13.
-
-    The UCB1 tree policy (Module 10) guides selection; zero-sum backpropagation
-    (Module 12) flips the sign at every level. Rollouts use an informed default
-    policy instead of uniform random, improving convergence speed.
+    MCTS (Module 13) + UCB1 (Module 10) + zero-sum backprop (Module 12).
+    Heuristic rollouts guide simulation. The tree is reused across moves:
+    after each act() the root is saved; the next call warm-starts from the
+    matching grandchild node, keeping all prior simulations.
     """
 
     def mount(self, action_timeout=None):
-        pass
+        self._prev_root = None
 
     def _me(self, b):
         return -1 if int(np.sum(b == -1)) == int(np.sum(b == 1)) else 1
@@ -156,12 +141,7 @@ class Hydra(Policy):
     # ── backpropagation ───────────────────────────────────────────────────────
 
     def _backprop(self, node, result):
-        """
-        result = +1 if node.player wins, -1 if node.player loses.
-        We store from parent's perspective (flip once before starting, then
-        flip at every level going up).  Module 12: U ← −γ·U at each step.
-        """
-        r = -result   # convert: from parent's (= -node.player's) perspective
+        r = -result
         n = node
         while n is not None:
             n.N += 1
@@ -169,25 +149,46 @@ class Hydra(Policy):
             r = -r
             n = n.parent
 
+    # ── tree reuse ────────────────────────────────────────────────────────────
+
+    def _find_reuse_node(self, board_key):
+        """
+        Search 2 levels into _prev_root for a node whose board matches
+        board_key (= current board after our move + opponent's response).
+        """
+        if self._prev_root is None:
+            return None
+        for c1 in self._prev_root.children:
+            for c2 in c1.children:
+                if c2.board.tobytes() == board_key:
+                    return c2
+        return None
+
     # ── main search ───────────────────────────────────────────────────────────
 
     def _mcts(self, board, p, t0):
-        root = _Node(board, p)
+        reuse = self._find_reuse_node(board.tobytes())
+        if reuse is not None:
+            root = reuse
+            root.parent = None
+        else:
+            root = _Node(board, p)
+
+        self.last_iterations = 0
 
         while time.time() - t0 < TIME_LIMIT:
+            self.last_iterations += 1
             # ── SELECTION ────────────────────────────────────────────────────
             node = root
             while not node.untried and node.children:
                 node = max(node.children, key=lambda n: n.ucb())
 
-            # ── terminal check at selected node ──────────────────────────────
+            # ── terminal check ───────────────────────────────────────────────
             if _wins(node.board, -node.player):
-                # previous player won → this node is a terminal loss for node.player
                 self._backprop(node, -1.0)
                 continue
 
             if not node.untried and not node.children:
-                # full board → draw
                 self._backprop(node, 0.0)
                 continue
 
@@ -199,33 +200,36 @@ class Hydra(Policy):
 
             # ── SIMULATION ───────────────────────────────────────────────────
             if _wins(nb, node.player):
-                # move just made was a win
-                result = -1.0   # from child.player's perspective: child.player lost
+                result = -1.0
             else:
-                # heuristic rollout from child state
                 result = _rollout(nb, child.player)
 
             # ── BACKPROPAGATION ───────────────────────────────────────────────
             self._backprop(child, result)
 
+        self._prev_root = root
+
         if not root.children:
             return _valid(board)[0]
-        # Return most-visited child (robust, lower variance than max Q)
         return max(root.children, key=lambda n: n.N).col
 
     # ── public interface ──────────────────────────────────────────────────────
 
     def act(self, s: np.ndarray) -> int:
+        if not hasattr(self, '_prev_root'):
+            self._prev_root = None
         p = self._me(s)
         t0 = time.time()
         valid = _valid(s)
 
-        # Immediate win / block (saves simulation budget)
+        # Immediate win / block — skip MCTS, clear tree (can't reuse)
         for col in valid:
             if _wins(_drop(s, col, p), p):
+                self._prev_root = None
                 return col
         for col in valid:
             if _wins(_drop(s, col, -p), -p):
+                self._prev_root = None
                 return col
 
         return self._mcts(s, p, t0)

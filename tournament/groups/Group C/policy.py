@@ -264,6 +264,7 @@ class Kronos(Policy):
     def act(self, s: np.ndarray) -> int:
         if not hasattr(self, 'tt'):
             self.tt = {}
+        self.last_depth = 0
         p = self._me(s)
         t0 = time.time()
         valid = _valid(s)
@@ -285,6 +286,7 @@ class Kronos(Policy):
             sc, col = self._negamax(s, depth, -INF, INF, p, t0)
             if col is not None:
                 best_col = col
+                self.last_depth = depth
             if sc >= INF:
                 break
 
