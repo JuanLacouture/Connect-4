@@ -1,15 +1,14 @@
-import math
 import time
 import numpy as np
 from connect4.policy import Policy
 
-# === Variables de configuración del curso (rúbrica criterio 2) ===
-MCTS_SIMULATIONS = 3000
-UCT_C = math.sqrt(2)
+# === Variable de configuración del curso (rúbrica criterio 2) ===
+# Profundidad de búsqueda minimax. 5 vence al aleatorio ~100%; 6-7 más fuerte
+# (más lento en Python puro). Guard de tiempo abajo evita cualquier exceso.
+SEARCH_DEPTH = 6
 
-_SEED = 1234
 _CENTER_ORDER = (3, 2, 4, 1, 5, 0, 6)
-_TIME_GUARD = 0.85  # s, red de seguridad
+_TIME_GUARD = 0.85  # s, red de seguridad aunque no haya límite conocido
 
 
 def _infer_me(b: np.ndarray) -> int:
@@ -63,45 +62,87 @@ def _winner(b: np.ndarray) -> int:
     return 0
 
 
-def _tactical_move(b: np.ndarray, p: int, legal: list[int]) -> int | None:
-    # Si p puede ganar ya, jugarlo; si no, bloquear victoria inmediata del rival.
+def _evaluate(b: np.ndarray, me: int) -> int:
+    opp = -me
+    score = int(np.count_nonzero(b[:, 3] == me)) * 6
+    score -= int(np.count_nonzero(b[:, 3] == opp)) * 6
+
+    def windows():
+        for r in range(6):
+            row = b[r]
+            for c in range(4):
+                yield (row[c], row[c + 1], row[c + 2], row[c + 3])
+        for c in range(7):
+            col = b[:, c]
+            for r in range(3):
+                yield (col[r], col[r + 1], col[r + 2], col[r + 3])
+        for r in range(3):
+            for c in range(4):
+                yield (b[r, c], b[r + 1, c + 1], b[r + 2, c + 2], b[r + 3, c + 3])
+        for r in range(3):
+            for c in range(3, 7):
+                yield (b[r, c], b[r + 1, c - 1], b[r + 2, c - 2], b[r + 3, c - 3])
+
+    for w in windows():
+        m = o = e = 0
+        for v in w:
+            if v == me:
+                m += 1
+            elif v == opp:
+                o += 1
+            else:
+                e += 1
+        if m and o:
+            continue
+        if m == 3 and e == 1:
+            score += 50
+        elif m == 2 and e == 2:
+            score += 10
+        elif m == 1 and e == 3:
+            score += 1
+        if o == 3 and e == 1:
+            score -= 80
+        elif o == 2 and e == 2:
+            score -= 12
+        elif o == 1 and e == 3:
+            score -= 1
+    return score
+
+
+def _minimax(b, depth, alpha, beta, maximizing, me, lr, lc, lp):
+    if _wins_at(b, lr, lc, lp):
+        return (1_000_000 + depth) if lp == me else -(1_000_000 + depth)
+    legal = _legal(b)
+    if not legal:
+        return 0
+    if depth == 0:
+        return _evaluate(b, me)
+    legal = _ordered(legal)
+    player = me if maximizing else -me
+    if maximizing:
+        val = -(10**9)
+        for c in legal:
+            r = _drop_row(b, c)
+            b[r, c] = player
+            val = max(val, _minimax(b, depth - 1, alpha, beta, False, me, r, c, player))
+            b[r, c] = 0
+            alpha = max(alpha, val)
+            if alpha >= beta:
+                break
+        return val
+    val = 10**9
     for c in legal:
         r = _drop_row(b, c)
-        b[r, c] = p
-        w = _wins_at(b, r, c, p)
+        b[r, c] = player
+        val = min(val, _minimax(b, depth - 1, alpha, beta, True, me, r, c, player))
         b[r, c] = 0
-        if w:
-            return c
-    for c in legal:
-        r = _drop_row(b, c)
-        b[r, c] = -p
-        w = _wins_at(b, r, c, -p)
-        b[r, c] = 0
-        if w:
-            return c
-    return None
+        beta = min(beta, val)
+        if alpha >= beta:
+            break
+    return val
 
 
-class _Node:
-    __slots__ = ("board", "to_move", "parent", "move", "children",
-                 "untried", "N", "W", "terminal")
-
-    def __init__(self, board, to_move, parent, move):
-        self.board = board
-        self.to_move = to_move          # jugador a mover en este estado
-        self.parent = parent
-        self.move = move                # columna jugada desde el padre
-        self.children: dict[int, _Node] = {}
-        self.untried = _ordered(_legal(board))
-        self.N = 0
-        self.W = 0.0                    # valor para el que movió HACIA este nodo
-        self.terminal: int | None = None  # ganador (-1/0/1) si terminal
-
-
-class MCTSPolicy(Policy):
-
-    def __init__(self) -> None:
-        self.rng = np.random.default_rng(_SEED)
+class MinimaxPolicy(Policy):
 
     def mount(self, timeout: float = None) -> None:
         pass
@@ -109,85 +150,35 @@ class MCTSPolicy(Policy):
     def act(self, s: np.ndarray) -> int:
         board = s.copy()
         me = _infer_me(board)
+        opp = -me
         legal = _legal(board)
 
-        tac = _tactical_move(board, me, legal)
-        if tac is not None:
-            return tac
-
-        root = _Node(board.copy(), me, None, None)
+        for c in legal:
+            r = _drop_row(board, c)
+            board[r, c] = me
+            win = _wins_at(board, r, c, me)
+            board[r, c] = 0
+            if win:
+                return c
+        for c in legal:
+            r = _drop_row(board, c)
+            board[r, c] = opp
+            block = _wins_at(board, r, c, opp)
+            board[r, c] = 0
+            if block:
+                return c
+        order = _ordered(legal)
+        best_c = order[0]
+        best_v = -(10**9)
         t0 = time.perf_counter()
-        for _ in range(MCTS_SIMULATIONS):
+        for c in order:
+            r = _drop_row(board, c)
+            board[r, c] = me
+            v = _minimax(board, SEARCH_DEPTH - 1, -(10**9), 10**9,
+                         False, me, r, c, me)
+            board[r, c] = 0
+            if v > best_v:
+                best_v, best_c = v, c
             if time.perf_counter() - t0 > _TIME_GUARD:
                 break
-            node = self._select(root)
-            node = self._expand(node)
-            result = self._rollout(node)
-            self._backprop(node, result)
-
-        best = max(root.children.values(), key=lambda n: n.N)
-        return best.move
-
-    def _select(self, node: _Node) -> _Node:
-        while node.terminal is None and not node.untried and node.children:
-            logN = math.log(node.N)
-            best_uct = -math.inf
-            best = None
-            for ch in node.children.values():
-                if ch.N == 0:
-                    best = ch
-                    break
-                uct = ch.W / ch.N + UCT_C * math.sqrt(logN / ch.N)
-                if uct > best_uct:
-                    best_uct, best = uct, ch
-            node = best
-        return node
-
-    def _expand(self, node: _Node) -> _Node:
-        if node.terminal is not None:
-            return node
-        w = _winner(node.board)
-        if w != 0 or not node.untried:
-            node.terminal = w if w != 0 else 0
-            if not node.untried and not _legal(node.board):
-                node.terminal = w
-            return node
-        c = node.untried.pop()
-        nb = node.board.copy()
-        r = _drop_row(nb, c)
-        nb[r, c] = node.to_move
-        child = _Node(nb, -node.to_move, node, c)
-        if _wins_at(nb, r, c, node.to_move):
-            child.terminal = node.to_move
-        elif not _legal(nb):
-            child.terminal = 0
-        node.children[c] = child
-        return child
-
-    def _rollout(self, node: _Node) -> int:
-        if node.terminal is not None:
-            return node.terminal
-        b = node.board.copy()
-        cur = node.to_move
-        while True:
-            legal = _legal(b)
-            if not legal:
-                return 0
-            mv = _tactical_move(b, cur, legal)
-            if mv is None:
-                mv = int(self.rng.choice(legal))
-            r = _drop_row(b, mv)
-            b[r, mv] = cur
-            if _wins_at(b, r, mv, cur):
-                return cur
-            cur = -cur
-
-    def _backprop(self, node: _Node, result: int) -> None:
-        while node is not None:
-            node.N += 1
-            mover = -node.to_move  # quien movió hacia 'node'
-            if result == mover:
-                node.W += 1.0
-            elif result == -mover:
-                node.W -= 1.0
-            node = node.parent
+        return best_c
