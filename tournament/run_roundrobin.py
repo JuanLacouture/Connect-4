@@ -129,7 +129,8 @@ def run_matchup(group_a, cls_a, group_b, cls_b, n_games):
             f"winner={result['winner']:<8} "
             f"moves={result['total_moves']:>2}  "
             f"dur={result['duration_seconds']:>5.1f}s  "
-            f"avg_decision={avg_time:.3f}s"
+            f"avg_decision={avg_time:.3f}s",
+            flush=True
         )
 
         hydra_in_match = "Hydra" in [cls_a, cls_b]

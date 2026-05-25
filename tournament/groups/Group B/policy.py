@@ -1,6 +1,6 @@
 """
 Group B — Hydra
-Algorithm: MCTS + UCB1 + Heuristic Rollouts + Persistent Tree Reuse
+Algorithm: MCTS + UCB1 + Heuristic Rollouts + Persistent Tree Reuse + Open-Three Block
 
 CONTEXT.md grounding (≥60 %):
   • MCTS — 4 phases (selection/expansion/simulation/backprop) → Module 13
@@ -10,6 +10,7 @@ CONTEXT.md grounding (≥60 %):
 External (≤40 %):
   • Heuristic rollout bias (win/block/center preference)
   • Persistent tree reuse between moves within a game
+  • Open-three block (scan all 4-windows, block any 3+empty where empty is playable now)
 """
 
 import numpy as np
@@ -56,6 +57,51 @@ def _wins(b, p):
             if b[r, c] == b[r-1, c+1] == b[r-2, c+2] == b[r-3, c+3] == p:
                 return True
     return False
+
+
+# ── open-three threat detection ──────────────────────────────────────────────
+
+def _next_row(b, col):
+    """Row where a piece would land if dropped in col (-1 if full)."""
+    for r in range(ROWS - 1, -1, -1):
+        if b[r, col] == 0:
+            return r
+    return -1
+
+
+def _open_three_block_cols(b, p):
+    """
+    Columns where dropping our piece blocks opponent p's 3-in-a-row threat.
+    Scans every 4-cell window; if p has 3 pieces and 1 empty cell, and that
+    empty cell is the next playable position in its column, that column is a threat.
+    """
+    threats = set()
+    opp = p  # we want to block opp = p
+    valid_set = set(_valid(b))
+
+    def _check_window(cells):
+        # cells = list of (row, col) positions in this 4-window
+        vals = [b[r, c] for r, c in cells]
+        if vals.count(opp) == 3 and vals.count(0) == 1:
+            idx = vals.index(0)
+            er, ec = cells[idx]
+            if ec in valid_set and _next_row(b, ec) == er:
+                threats.add(ec)
+
+    for r in range(ROWS):
+        for c in range(COLS - 3):
+            _check_window([(r, c+i) for i in range(4)])
+    for r in range(ROWS - 3):
+        for c in range(COLS):
+            _check_window([(r+i, c) for i in range(4)])
+    for r in range(ROWS - 3):
+        for c in range(COLS - 3):
+            _check_window([(r+i, c+i) for i in range(4)])
+    for r in range(3, ROWS):
+        for c in range(COLS - 3):
+            _check_window([(r-i, c+i) for i in range(4)])
+
+    return list(threats)
 
 
 # ── heuristic rollout ─────────────────────────────────────────────────────────
@@ -222,14 +268,19 @@ class Hydra(Policy):
         t0 = time.time()
         valid = _valid(s)
 
-        # Immediate win / block — skip MCTS, clear tree (can't reuse)
+        # 1. Immediate win
         for col in valid:
             if _wins(_drop(s, col, p), p):
-                self._prev_root = None
                 return col
+
+        # 2. Block immediate loss
         for col in valid:
             if _wins(_drop(s, col, -p), -p):
-                self._prev_root = None
                 return col
+
+        # 3. Block opponent open-three threats (3-in-a-row completable this turn)
+        opp_threes = _open_three_block_cols(s, -p)
+        if len(opp_threes) == 1:
+            return opp_threes[0]
 
         return self._mcts(s, p, t0)

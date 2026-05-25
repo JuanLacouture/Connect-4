@@ -3,7 +3,16 @@
     "allow": [
       "Bash(python -c ' *)",
       "Bash(python run_roundrobin.py)",
-      "Bash(python -c \"import runpy; ns = runpy.run_path\\('groups/Group B/policy.py'\\); h = ns['Hydra']\\(\\); h.mount\\(\\); import numpy as np; b = np.zeros\\(\\(6,7\\),dtype=int\\); print\\('act:', h.act\\(b\\)\\)\")"
+      "Bash(python -c \"import runpy; ns = runpy.run_path\\('groups/Group B/policy.py'\\); h = ns['Hydra']\\(\\); h.mount\\(\\); import numpy as np; b = np.zeros\\(\\(6,7\\),dtype=int\\); print\\('act:', h.act\\(b\\)\\)\")",
+      "Bash(Get-Content \"C:\\\\Users\\\\berri\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-berri-Desktop-Universidad-Fundamentos-de-IA-Connect-4\\\\0d2b93ff-7537-4f9e-9f2b-72ade4d1e9b4\\\\tasks\\\\bxb9sm8ge.output\")",
+      "Bash(Select-Object -Last 20)",
+      "PowerShell(Get-Process python -ErrorAction SilentlyContinue)",
+      "PowerShell(ls \"C:\\\\Users\\\\berri\\\\Desktop\\\\Universidad\\\\Fundamentos de IA\\\\Connect-4\\\\tournament\\\\versus\\\\\")",
+      "Bash(Get-Content \"C:\\\\Users\\\\berri\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-berri-Desktop-Universidad-Fundamentos-de-IA-Connect-4\\\\0d2b93ff-7537-4f9e-9f2b-72ade4d1e9b4\\\\tasks\\\\bwc0lmewr.output\" -Raw)",
+      "Bash(kill 1725)",
+      "Bash(timeout 20 python -c ' *)",
+      "Bash(timeout 30 python -c ' *)",
+      "Bash(kill 948)"
     ]
   }
 }
