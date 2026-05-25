@@ -12,7 +12,8 @@
       "Bash(kill 1725)",
       "Bash(timeout 20 python -c ' *)",
       "Bash(timeout 30 python -c ' *)",
-      "Bash(kill 948)"
+      "Bash(kill 948)",
+      "Bash(python -c \"from matplotlib.backends.backend_pdf import PdfPages; print\\('matplotlib PDF OK'\\)\")"
     ]
   }
 }

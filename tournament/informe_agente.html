@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Informe Agente Connect-4</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 8.5pt;
+    color: #111;
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page { size: A4 portrait; margin: 11mm 12mm 10mm 12mm; }
+  @media print  { .pb { page-break-after: always; break-after: page; } }
+  @media screen { .pb { border-bottom: 2px dashed #bbb; margin-bottom: 22px; padding-bottom: 22px; } }
+
+  .two-col   { display: flex; gap: 13px; }
+  .col-l     { flex: 0 0 55%; }
+  .col-r     { flex: 1; }
+  .three-col { display: flex; gap: 10px; margin-top: 4px; }
+  .col3      { flex: 1; }
+  .col3 svg  { width: 100%; height: auto; display: block; }
+  .res-row   { display: flex; gap: 12px; align-items: flex-start; margin-top: 5px; }
+
+  .hdr    { text-align: center; border-bottom: 1.2px solid #111; padding-bottom: 4px; margin-bottom: 7px; }
+  .hdr h1 { font-size: 14pt; font-weight: bold; color: #000; margin-bottom: 2px; }
+  .hdr p  { font-size: 8pt; color: #333; line-height: 1.75; }
+  .st     { font-size: 9.5pt; font-weight: bold; color: #000;
+            border-bottom: 0.8px solid #777; padding-bottom: 1px; margin: 7px 0 4px; }
+  .sub    { font-size: 8pt; font-weight: bold; color: #222; margin: 4px 0 2px; }
+  .body   { font-size: 8pt; line-height: 1.65; color: #111; }
+  .body p { margin-bottom: 2px; }
+  .body ul { padding-left: 11px; margin-bottom: 2px; }
+  .body li { margin-bottom: 1px; }
+  .fml    { background: #f2f2f2; border-left: 2px solid #333; padding: 3px 8px;
+            margin: 3px 0; font-size: 8pt; }
+  code    { font-family: 'Courier New', monospace; font-size: 7.2pt;
+            background: #ececec; padding: 0 2px; }
+
+  table   { border-collapse: collapse; width: 100%; }
+  th      { background: #111; color: #fff; padding: 4px 5px; text-align: left; font-size: 7.5pt; }
+  td      { padding: 3px 5px; border: 0.5px solid #bbb; vertical-align: top;
+            font-size: 7.5pt; line-height: 1.38; }
+  .r-odd  td { background: #f7f7f7; }
+  .r-even td { background: #fff; }
+  .r-main td { background: #e8e8e8; }
+  .r-main td:first-child { font-weight: bold; }
+  .h2h tr:nth-child(odd)  td { background: #f7f7f7; }
+  .h2h tr:nth-child(even) td { background: #fff; }
+  .c  { text-align: center; }
+  .b  { font-weight: bold; }
+
+  .ctitle  { font-size: 7.8pt; font-weight: bold; color: #000; text-align: center;
+             margin-bottom: 1px; line-height: 1.3; }
+  .caption { font-size: 6.8pt; color: #444; font-style: italic; text-align: center;
+             margin-bottom: 3px; line-height: 1.35; }
+  svg text { font-family: Georgia, 'Times New Roman', serif; }
+
+  .concl    { font-size: 8pt; line-height: 1.65; padding-left: 12px; }
+  .concl li { margin-bottom: 3px; }
+  .imp      { font-size: 8pt; line-height: 1.65; margin-bottom: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════  PÁGINA 1  ═══════════════ -->
+<div class="hdr">
+  <h1>Desarrollo y Análisis del Agente Connect-4</h1>
+  <p>Juan Lacouture &nbsp;•&nbsp; Fundamentos de Inteligencia Artificial &nbsp;•&nbsp;
+     Universidad de La Sabana &nbsp;•&nbsp; 2026-1 &nbsp;•&nbsp;
+     Profesor: Sergio Andrés Amortegui</p>
+</div>
+
+<div style="text-align:center; font-size:7.5pt; color:#444; margin-bottom:6px">
+  Código fuente: <a href="https://github.com/JuanLacouture/Connect-4/blob/Juan-Lacouture/tournament/groups/Group%20B/policy.py"
+  style="color:#2980b9; text-decoration:none; font-family:'Courier New',monospace; font-size:7pt">
+  github.com/JuanLacouture/Connect-4 → branch Juan-Lacouture → tournament/groups/Group B/policy.py</a>
+</div>
+
+<div class="st">Idea Principal — Hydra (MCTS + UCB1)</div>
+<div class="body">
+  <p>Hydra implementa <strong>MCTS</strong> (Monte Carlo Tree Search), algoritmo de búsqueda
+  <em>online</em> estocástico que no requiere entrenamiento <em>offline</em>. El conocimiento
+  se construye durante la partida acumulando estimaciones W/N en el árbol (GPI online, Mód. 9/13).</p>
+
+  <div class="sub">MDP</div>
+  <ul>
+    <li><strong>S</strong>: tableros 6×7 con fichas {−1, 0, +1} — ~4.5×10¹² estados</li>
+    <li><strong>A</strong>: columnas válidas ⊆ {0,…,6}, conjunto dinámico por estado</li>
+    <li><strong>R</strong>: +1 victoria, 0 empate, −1 derrota (solo en nodos terminales)</li>
+    <li>Transición determinista dado el movimiento del oponente</li>
+  </ul>
+
+  <div class="fml">UCB1(n) = W/N + √2 · √(ln N<sub>parent</sub> / N) &nbsp;[Mód. 10/13]</div>
+
+  <p><strong>Tree reuse</strong> (técnica externa): el árbol persiste entre turnos. Al iniciar
+  cada turno se reutiliza el subárbol del sucesor con sus W,N acumulados, eliminando el reinicio
+  en frío entre jugadas consecutivas.</p>
+
+  <div class="sub">Comportamiento frente a distintos oponentes</div>
+  <ul>
+    <li><strong>vs. jugador aleatorio</strong> — π<sub>opp</sub>(a|s)=1/|A|: oponente sin política
+    adaptativa → MDP trivial. <strong>WR = 100 % en ambos colores</strong>
+    (50 W / 0 L como Rojo; 50 W / 0 L como Amarillo — verificado empíricamente, secc. 5b entrega.ipynb).</li>
+    <li><strong>vs. Titan / Kronos (Negamax α-β, determinista)</strong>: políticas greedy fijas.
+    MCTS responde con diversificación estocástica UCB1, evitando que el oponente anticipe siempre
+    la misma respuesta.</li>
+    <li><strong>Self-play</strong>: UCB1 con signo alternado (Mód. 12) → convergencia al equilibrio
+    de Nash local. Diferencial 1ro/2do = +6 pp — evidencia de robustez independiente de turno y
+    mínima ventaja posicional residual.</li>
+  </ul>
+</div>
+
+<div class="st">Configuración y Recursos</div>
+<table>
+  <thead><tr><th>Parámetro</th><th>Valor</th><th>Mód.</th></tr></thead>
+  <tbody>
+    <tr class="r-odd" ><td>Entrenamiento <em>offline</em></td><td>Ninguno</td><td class="c">—</td></tr>
+    <tr class="r-even"><td>Recurso <em>online</em></td><td>TIME_LIMIT = 1.75 s/mov</td><td class="c">—</td></tr>
+    <tr class="r-odd" ><td>Tipo de búsqueda</td><td>MCTS online estocástico</td><td class="c">13</td></tr>
+    <tr class="r-even"><td>Política árbol — UCB1</td><td>C = √2 ≈ 1.414</td><td class="c">10</td></tr>
+    <tr class="r-odd" ><td>Zero-sum / flip signo</td><td>Alternado por turno</td><td class="c">12</td></tr>
+    <tr class="r-even"><td>GPI online</td><td>Acumula (W, N) por nodo</td><td class="c">9/13</td></tr>
+    <tr class="r-odd" ><td>Rollout heurístico</td><td>Win → Block → Centro-biased</td><td class="c">ext.</td></tr>
+    <tr class="r-even"><td>Tree reuse</td><td>Subárbol persiste entre turnos</td><td class="c">ext.</td></tr>
+    <tr class="r-odd" ><td>Tabla de transposición</td><td>No</td><td class="c">—</td></tr>
+    <tr class="r-even"><td>Profundidad máx.</td><td>∞ anytime (acotada por t)</td><td class="c">—</td></tr>
+  </tbody>
+</table>
+
+<div class="st">Agentes del torneo</div>
+<table>
+  <thead>
+    <tr><th style="width:13%">Agente</th><th style="width:7%">WR</th>
+        <th style="width:32%">Algoritmo</th><th>Distinción clave</th></tr>
+  </thead>
+  <tbody>
+    <tr class="r-main">
+      <td>Hydra (B) [Principal]</td><td class="c b">89 %</td>
+      <td>MCTS + UCB1 + Tree Reuse + Rollout heurístico</td>
+      <td>Único agente online estocástico; árbol UCB1 persiste entre turnos</td>
+    </tr>
+    <tr class="r-odd">
+      <td>Titan (A)</td><td class="c b">47 %</td>
+      <td>Negamax + α-β + Tabla Transposición + IDS</td>
+      <td>Búsqueda exacta anytime d=13; tabla de transposición para nodos repetidos</td>
+    </tr>
+    <tr class="r-even">
+      <td>Kronos (C)</td><td class="c b">14 %</td>
+      <td>Negamax + α-β + Heurística Doble Amenaza + UCB1 raíz</td>
+      <td>Detecta forks (≥2 amenazas) con bonus de evaluación; UCB1 en raíz</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="st">Resultados — Round-robin (150 partidas, 50 por matchup)</div>
+<div class="res-row">
+  <div style="flex:0 0 auto">
+    <!-- bar chart: chart area y=14..106 (92px=100 games); Titan47→h=43.2,y=62.8; Hydra89→h=81.9,y=24.1; Kronos14→h=12.9,y=93.1 -->
+    <svg viewBox="0 0 192 126" width="192" height="126">
+      <text x="96" y="10" text-anchor="middle" font-size="7.8" font-weight="bold" fill="#000">Victorias / 100 partidas</text>
+      <line x1="38" y1="14" x2="38"  y2="106" stroke="#888" stroke-width="0.8"/>
+      <line x1="38" y1="106" x2="173" y2="106" stroke="#888" stroke-width="0.8"/>
+      <line x1="38" y1="60"  x2="173" y2="60"  stroke="#ddd" stroke-dasharray="3,2" stroke-width="0.5"/>
+      <line x1="38" y1="14"  x2="173" y2="14"  stroke="#ddd" stroke-dasharray="3,2" stroke-width="0.5"/>
+      <text x="34" y="109" text-anchor="end" font-size="7" fill="#555">0</text>
+      <text x="34" y="63"  text-anchor="end" font-size="7" fill="#555">50</text>
+      <text x="34" y="17"  text-anchor="end" font-size="7" fill="#555">100</text>
+      <rect x="50"  y="62.8" width="27" height="43.2" fill="#e74c3c" stroke="#c0392b" stroke-width="0.5"/>
+      <text x="63.5"  y="59.5" text-anchor="middle" font-size="8" font-weight="bold" fill="#c0392b">47%</text>
+      <text x="63.5"  y="116"  text-anchor="middle" font-size="8" fill="#111">Titan</text>
+      <rect x="87"  y="24.1" width="27" height="81.9" fill="#3498db" stroke="#2980b9" stroke-width="0.5"/>
+      <text x="100.5" y="20.5" text-anchor="middle" font-size="8" font-weight="bold" fill="#2471a3">89%</text>
+      <text x="100.5" y="116"  text-anchor="middle" font-size="8" fill="#111">Hydra</text>
+      <rect x="124" y="93.1" width="27" height="12.9" fill="#2ecc71" stroke="#27ae60" stroke-width="0.5"/>
+      <text x="137.5" y="89.5" text-anchor="middle" font-size="8" font-weight="bold" fill="#1e8449">14%</text>
+      <text x="137.5" y="116"  text-anchor="middle" font-size="8" fill="#111">Kronos</text>
+    </svg>
+  </div>
+  <div style="flex:1">
+    <div style="font-size:8pt; font-weight:bold; margin-bottom:4px">Head-to-Head por matchup</div>
+    <table class="h2h">
+      <thead><tr><th>Enfrentamiento</th><th>Marcador</th><th>WR líder</th></tr></thead>
+      <tbody>
+        <tr><td>Hydra vs. Titan</td><td class="c">43 – 7</td><td class="c b">86 %</td></tr>
+        <tr><td>Hydra vs. Kronos</td><td class="c">46 – 4</td><td class="c b">92 %</td></tr>
+        <tr><td>Titan vs. Kronos</td><td class="c">40 – 10</td><td class="c b">80 %</td></tr>
+      </tbody>
+    </table>
+    <div style="font-size:6.8pt; color:#555; margin-top:4px; font-style:italic">
+      Código — Hydra: .../Group B/policy.py &nbsp;|&nbsp; Titan: .../Group A/policy.py &nbsp;|&nbsp; Kronos: .../Group C/policy.py
+    </div>
+  </div>
+</div>
+
+<div class="pb"></div>
+
+<!-- ═══════════════  PÁGINA 2  ═══════════════ -->
+<div style="text-align:center; font-size:10pt; font-weight:bold;
+            border-bottom:0.8px solid #777; padding-bottom:3px; margin-bottom:5px">
+  Análisis Empírico y Aprendizaje &nbsp;—&nbsp; datos de <em>entrega.ipynb</em>
+</div>
+
+<!-- ─── Fig 1: MCTS iterations per move within game (full width) ───
+     ViewBox 545×140. Chart area x=55..525 (470px), y=18..110 (92px).
+     Y scale: 92px / 160 000 iter = 0.000575 px/iter.  y(n) = 110 − n·0.000575
+     Gridlines:  50k→y=81.3   100k→y=52.5   150k→y=23.8
+     X: moves 1‑18, step=470/17=27.65.  x(m)=55+(m‑1)·27.65
+     Mean points (move → iter → y):
+       1:300→109.8  2:300→109.8  3:300→109.8  4:300→109.8  5:350→109.8
+       6:500→109.7  7:800→109.5  8:2000→108.9  9:5000→107.1  10:10000→104.3
+       11:35000→89.9  12:55000→78.4  13:80000→64.0  14:88000→59.4
+       15:98000→53.7  16:115000→43.9  17:140000→29.5  18:160000→18.0
+     Upper σ band (moves 8‑18, beyond is tight):
+       8:10000→104.3  9:21000→97.9  10:60000→75.5  11:100000→52.5
+       12:130000→35.3  13:145000→26.6  14‑18: clip to y=18
+     Lower σ band (reversed 18→8):
+       18:110000→46.8  17:80000→64.0  16:50000→81.3  15:30000→92.8
+       14:20000→98.5  13:15000→101.4  12:7000→106.0  11:200→109.9  10→109.8 -->
+<div class="ctitle">
+  Fig. 1 — Hydra: Iteraciones MCTS por jugada dentro de la partida (sección 3, entrega.ipynb)
+</div>
+<div class="caption">
+  Tree reuse: el árbol persiste entre turnos — jugada 1 parte de árbol frío (~300 iter);
+  en la última jugada el árbol acumulado permite &gt;160 000 iter. Crecimiento &gt;500× en
+  una sola partida. Banda ±1σ en azul claro. Fuente: sección 3, entrega.ipynb.
+</div>
+<svg viewBox="0 0 545 140" style="width:100%;height:auto;display:block;margin-bottom:4px">
+  <defs>
+    <marker id="arr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+      <polygon points="0,0 5,2.5 0,5" fill="#666"/>
+    </marker>
+  </defs>
+  <!-- σ band: upper forward + lower reversed -->
+  <polygon points="
+    55,109.8 82.6,109.8 110.3,109.8 137.9,109.8 165.5,109.8 193.2,109.7 220.8,109.5
+    248.4,104.3 276.1,97.9 303.7,75.5 331.3,52.5 359,35.3 386.6,26.6
+    414.2,18 441.9,18 469.5,18 497.1,18 525,18
+    525,46.8 497.1,64 469.5,81.3 441.9,92.8 414.2,98.5
+    386.6,101.4 359,106 331.3,109.9 303.7,109.8 276.1,109.8
+    248.4,109 220.8,109.5 193.2,109.7 165.5,109.8 137.9,109.8
+    110.3,109.8 82.6,109.8 55,109.8"
+    fill="rgba(52,152,219,0.18)" stroke="none"/>
+  <!-- axes -->
+  <line x1="55" y1="18"  x2="55"  y2="110" stroke="#888" stroke-width="0.8"/>
+  <line x1="55" y1="110" x2="525" y2="110" stroke="#888" stroke-width="0.8"/>
+  <!-- horizontal gridlines -->
+  <line x1="55" y1="81.3" x2="525" y2="81.3" stroke="#e0e0e0" stroke-dasharray="3,2" stroke-width="0.5"/>
+  <line x1="55" y1="52.5" x2="525" y2="52.5" stroke="#e0e0e0" stroke-dasharray="3,2" stroke-width="0.5"/>
+  <line x1="55" y1="23.8" x2="525" y2="23.8" stroke="#e0e0e0" stroke-dasharray="3,2" stroke-width="0.5"/>
+  <!-- Y labels -->
+  <text x="51" y="113"  text-anchor="end" font-size="7" fill="#555">0</text>
+  <text x="51" y="84.3" text-anchor="end" font-size="7" fill="#555">50k</text>
+  <text x="51" y="55.5" text-anchor="end" font-size="7" fill="#555">100k</text>
+  <text x="51" y="26.8" text-anchor="end" font-size="7" fill="#555">150k</text>
+  <text x="9"  y="65"  text-anchor="middle" font-size="7" fill="#555" transform="rotate(-90,9,65)">Iteraciones MCTS</text>
+  <!-- X axis ticks at 2.5, 5.0, 7.5, 10.0, 12.5, 15.0, 17.5 -->
+  <line x1="96.5"  y1="110" x2="96.5"  y2="113" stroke="#888" stroke-width="0.6"/>
+  <line x1="165.5" y1="110" x2="165.5" y2="113" stroke="#888" stroke-width="0.6"/>
+  <line x1="234.7" y1="110" x2="234.7" y2="113" stroke="#888" stroke-width="0.6"/>
+  <line x1="303.7" y1="110" x2="303.7" y2="113" stroke="#888" stroke-width="0.6"/>
+  <line x1="372.9" y1="110" x2="372.9" y2="113" stroke="#888" stroke-width="0.6"/>
+  <line x1="441.9" y1="110" x2="441.9" y2="113" stroke="#888" stroke-width="0.6"/>
+  <line x1="511.2" y1="110" x2="511.2" y2="113" stroke="#888" stroke-width="0.6"/>
+  <text x="96.5"  y="120" text-anchor="middle" font-size="7" fill="#555">2.5</text>
+  <text x="165.5" y="120" text-anchor="middle" font-size="7" fill="#555">5.0</text>
+  <text x="234.7" y="120" text-anchor="middle" font-size="7" fill="#555">7.5</text>
+  <text x="303.7" y="120" text-anchor="middle" font-size="7" fill="#555">10.0</text>
+  <text x="372.9" y="120" text-anchor="middle" font-size="7" fill="#555">12.5</text>
+  <text x="441.9" y="120" text-anchor="middle" font-size="7" fill="#555">15.0</text>
+  <text x="511.2" y="120" text-anchor="middle" font-size="7" fill="#555">17.5</text>
+  <text x="290"   y="131" text-anchor="middle" font-size="7.5" fill="#555">Jugada N del agente dentro de la partida</text>
+  <!-- Mean line -->
+  <polyline
+    points="55,109.8 82.6,109.8 110.3,109.8 137.9,109.8 165.5,109.8 193.2,109.7
+            220.8,109.5 248.4,108.9 276.1,107.1 303.7,104.3 331.3,89.9 359,78.4
+            386.6,64 414.2,59.4 441.9,53.7 469.5,43.9 497.1,29.5 525,18"
+    fill="none" stroke="#3498db" stroke-width="2" stroke-linejoin="round"/>
+  <!-- End dots -->
+  <circle cx="55"  cy="109.8" r="2.5" fill="#3498db"/>
+  <circle cx="525" cy="18"    r="2.5" fill="#3498db"/>
+  <!-- Annotation arrow pointing at inflection around move 10-11 -->
+  <line x1="370" y1="54" x2="340" y2="72" stroke="#666" stroke-width="0.8" marker-end="url(#arr)"/>
+  <text x="372" y="51" font-size="7" fill="#555" font-style="italic">↑ árbol acumula</text>
+  <text x="372" y="60" font-size="7" fill="#555" font-style="italic">  nodos entre turnos</text>
+  <!-- Start/end value callouts -->
+  <text x="60"  y="106" font-size="7" fill="#1a5276">~300</text>
+  <text x="512" y="14"  font-size="7" fill="#1a5276" text-anchor="middle">~160k</text>
+  <!-- Legend -->
+  <line x1="65" y1="31" x2="85" y2="31" stroke="#3498db" stroke-width="2"/>
+  <text x="88"  y="34" font-size="7.5" fill="#3498db">Media</text>
+  <rect x="142" y="25" width="16" height="8" fill="rgba(52,152,219,0.18)" stroke="rgba(52,152,219,0.4)" stroke-width="0.5"/>
+  <text x="160" y="33" font-size="7.5" fill="#555">±1σ</text>
+</svg>
+
+<!-- ─── Three small charts ─── -->
+<div class="three-col">
+
+  <!-- Fig 2: Cumulative WR — all 3 matchups on one chart
+       ViewBox 190×148. Chart area x=28..183 (155px), y=10..108 (98px).
+       Y: 0-100%, scale 0.98 px/%.  y(p) = 108 − p·0.98
+         0%→108  50%→59  70%→39.4  80%→30.4  86%→24.1  92%→18  100%→10
+       X: games 1-50, step=155/49=3.163.  x(g)=28+(g-1)·3.163
+         G1:28  G2:31.2  G5:40.7  G10:56.5  G15:72.3  G20:88.1  G30:119.7  G40:151.4  G50:183
+       Hydra vs Kronos (blue #3498db, Hydra WR, ends 92%):
+         G1→10  G5→18  G10→17  G20→18  G50→18
+       Hydra vs Titan (red #e74c3c, Hydra WR, ends 86%):
+         G1→10  G2→44.1(65%)  G5→34.6(74%)  G10→30.4(80%)  G20→26.5(83%)  G30→25.5(84%)  G50→24
+       Titan vs Kronos (orange #f39c12, Titan WR, ends 80%):
+         G1→10  G2→59(50%)  G3→40.3(70%)  G5→34.6  G10→30.4  G30→28.6  G50→30.4 -->
+  <div class="col3">
+    <div class="ctitle">Fig. 2 — WR acumulado por partida (secc. 4)</div>
+    <div class="caption">Curvas estables a partir de la partida 10–15. Cada línea es el
+    WR del agente ganador a lo largo de 50 juegos. Fuente: sección 4, entrega.ipynb.</div>
+    <svg viewBox="0 0 190 148">
+      <line x1="28" y1="10"  x2="28"  y2="108" stroke="#888" stroke-width="0.8"/>
+      <line x1="28" y1="108" x2="183" y2="108" stroke="#888" stroke-width="0.8"/>
+      <!-- gridlines at 50% y=59 and 80% y=30.4 -->
+      <line x1="28" y1="59"   x2="183" y2="59"   stroke="#ddd" stroke-dasharray="3,2" stroke-width="0.5"/>
+      <line x1="28" y1="30.4" x2="183" y2="30.4" stroke="#ddd" stroke-dasharray="3,2" stroke-width="0.5"/>
+      <line x1="28" y1="10"   x2="183" y2="10"   stroke="#ddd" stroke-dasharray="3,2" stroke-width="0.5"/>
+      <!-- Y labels -->
+      <text x="24" y="13"   text-anchor="end" font-size="7" fill="#555">100%</text>
+      <text x="24" y="33.4" text-anchor="end" font-size="7" fill="#555">80%</text>
+      <text x="24" y="62"   text-anchor="end" font-size="7" fill="#555">50%</text>
+      <text x="24" y="111"  text-anchor="end" font-size="7" fill="#555">0%</text>
+      <!-- X labels -->
+      <text x="28"   y="117" text-anchor="middle" font-size="6.5" fill="#555">1</text>
+      <text x="56.5" y="117" text-anchor="middle" font-size="6.5" fill="#555">10</text>
+      <text x="119.7" y="117" text-anchor="middle" font-size="6.5" fill="#555">30</text>
+      <text x="183"  y="117" text-anchor="middle" font-size="6.5" fill="#555">50</text>
+      <text x="106"  y="125" text-anchor="middle" font-size="7" fill="#555">Número de partida</text>
+      <!-- Hydra vs Kronos: blue #3498db -->
+      <polyline points="28,10 40.7,18 56.5,17 88.1,18 119.7,19 151.4,18 183,18"
+                fill="none" stroke="#3498db" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="183" cy="18" r="2" fill="#3498db"/>
+      <!-- Hydra vs Titan: red #e74c3c -->
+      <polyline points="28,10 31.2,44.1 34.3,39.4 40.7,34.6 56.5,30.4 72.3,27.6 88.1,26.5 119.7,25.5 151.4,24.5 183,24"
+                fill="none" stroke="#e74c3c" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="183" cy="24" r="2" fill="#e74c3c"/>
+      <!-- Titan vs Kronos: orange #f39c12 -->
+      <polyline points="28,10 31.2,59 34.3,40.3 40.7,34.6 56.5,30.4 72.3,30.4 119.7,28.6 151.4,30.4 183,30.4"
+                fill="none" stroke="#f39c12" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="183" cy="30.4" r="2" fill="#d68910"/>
+      <!-- End labels -->
+      <text x="185" y="21"   font-size="7" fill="#3498db" font-weight="bold">92%</text>
+      <text x="185" y="27"   font-size="7" fill="#c0392b" font-weight="bold">86%</text>
+      <text x="185" y="33.4" font-size="7" fill="#d68910" font-weight="bold">80%</text>
+      <!-- Legend -->
+      <line x1="30" y1="134" x2="44" y2="134" stroke="#3498db" stroke-width="1.8"/>
+      <text x="46" y="137" font-size="6.5" fill="#3498db">H vs K</text>
+      <line x1="80" y1="134" x2="94" y2="134" stroke="#e74c3c" stroke-width="1.8"/>
+      <text x="96" y="137" font-size="6.5" fill="#c0392b">H vs T</text>
+      <line x1="128" y1="134" x2="142" y2="134" stroke="#f39c12" stroke-width="1.8"/>
+      <text x="144" y="137" font-size="6.5" fill="#d68910">T vs K</text>
+    </svg>
+  </div>
+
+  <!-- Fig 3: WR by position (first vs second)
+       Titan: 56%(h=54.9,y=53.1) / 38%(h=37.2,y=70.8)
+       Hydra: 92%(h=90.2,y=17.8) / 86%(h=84.3,y=23.7)
+       Kronos: 24%(h=23.5,y=84.5) / 4%(h=3.9,y=104.1) -->
+  <div class="col3">
+    <div class="ctitle">Fig. 3 — WR por rol de turno (secc. 5)</div>
+    <div class="caption">Barra opaca = va primero. Barra semitransparente = segundo.
+    Hydra solo +6 pp frente a +18 pp (Titan) y +20 pp (Kronos). Secc. 5, entrega.ipynb.</div>
+    <svg viewBox="0 0 190 148">
+      <line x1="35" y1="10"  x2="35"  y2="108" stroke="#888" stroke-width="0.8"/>
+      <line x1="35" y1="108" x2="183" y2="108" stroke="#888" stroke-width="0.8"/>
+      <line x1="35" y1="59"  x2="183" y2="59"  stroke="#aaa" stroke-dasharray="4,3" stroke-width="0.8"/>
+      <line x1="35" y1="10"  x2="183" y2="10"  stroke="#ddd" stroke-dasharray="3,2" stroke-width="0.5"/>
+      <text x="31" y="111" text-anchor="end" font-size="7" fill="#555">0</text>
+      <text x="31" y="62"  text-anchor="end" font-size="7" fill="#555">50</text>
+      <text x="31" y="13"  text-anchor="end" font-size="7" fill="#555">100</text>
+      <!-- Titan -->
+      <rect x="46" y="53.1" width="13" height="54.9" fill="#e74c3c"/>
+      <rect x="60" y="70.8" width="13" height="37.2" fill="#e74c3c" fill-opacity="0.38" stroke="#e74c3c" stroke-width="0.5"/>
+      <text x="52.5" y="50"   text-anchor="middle" font-size="6.8" fill="#c0392b">56%</text>
+      <text x="66.5" y="67.5" text-anchor="middle" font-size="6.8" fill="#c0392b">38%</text>
+      <text x="59"   y="120"  text-anchor="middle" font-size="7.8" fill="#111">Titan</text>
+      <text x="59"   y="129"  text-anchor="middle" font-size="6.5" fill="#c0392b">Δ +18pp</text>
+      <!-- Hydra -->
+      <rect x="87"  y="17.8" width="13" height="90.2" fill="#3498db"/>
+      <rect x="101" y="23.7" width="13" height="84.3" fill="#3498db" fill-opacity="0.38" stroke="#3498db" stroke-width="0.5"/>
+      <text x="93.5"  y="14.5" text-anchor="middle" font-size="6.8" fill="#2471a3">92%</text>
+      <text x="107.5" y="20.5" text-anchor="middle" font-size="6.8" fill="#2471a3">86%</text>
+      <text x="100"   y="120"  text-anchor="middle" font-size="7.8" fill="#111">Hydra</text>
+      <text x="100"   y="129"  text-anchor="middle" font-size="6.5" fill="#2471a3">Δ +6pp</text>
+      <!-- Kronos -->
+      <rect x="128" y="84.5"  width="13" height="23.5" fill="#2ecc71"/>
+      <rect x="142" y="104.1" width="13" height="3.9"  fill="#2ecc71" fill-opacity="0.38" stroke="#2ecc71" stroke-width="0.5"/>
+      <text x="134.5" y="81"  text-anchor="middle" font-size="6.8" fill="#1e8449">24%</text>
+      <text x="148.5" y="101" text-anchor="middle" font-size="6.8" fill="#1e8449">4%</text>
+      <text x="141"   y="120" text-anchor="middle" font-size="7.8" fill="#111">Kronos</text>
+      <text x="141"   y="129" text-anchor="middle" font-size="6.5" fill="#1e8449">Δ +20pp</text>
+      <!-- legend -->
+      <rect x="38" y="138" width="8" height="7" fill="#555"/>
+      <text x="49"  y="145" font-size="7" fill="#111">1ro (−1)</text>
+      <rect x="93"  y="138" width="8" height="7" fill="#555" fill-opacity="0.38" stroke="#555" stroke-width="0.5"/>
+      <text x="104" y="145" font-size="7" fill="#555">2do (+1)</text>
+    </svg>
+  </div>
+
+  <!-- Fig 4: MCTS quartiles by avg iterations
+       Q1 88%: h=86.2,y=21.8  Q2 100%: h=98,y=10  Q3 100%: h=98,y=10  Q4 68%: h=66.6,y=41.4
+       med values: Q1=989, Q2=2581, Q3=13404, Q4=28802 -->
+  <div class="col3">
+    <div class="ctitle">Fig. 4 — WR Hydra por cuartil iter. MCTS (secc. 6)</div>
+    <div class="caption">Q2–Q3 (2.6k–13.4k iter) = WR 100 %. Q4 cae a 68 %: partidas largas
+    implican que Titan alcanzó mayor profundidad α-β. Secc. 6, entrega.ipynb.</div>
+    <svg viewBox="0 0 190 148">
+      <line x1="35" y1="10"  x2="35"  y2="108" stroke="#888" stroke-width="0.8"/>
+      <line x1="35" y1="108" x2="183" y2="108" stroke="#888" stroke-width="0.8"/>
+      <line x1="35" y1="59"  x2="183" y2="59"  stroke="#ddd" stroke-dasharray="3,2" stroke-width="0.5"/>
+      <line x1="35" y1="10"  x2="183" y2="10"  stroke="#ddd" stroke-dasharray="3,2" stroke-width="0.5"/>
+      <text x="31" y="111" text-anchor="end" font-size="7" fill="#555">0</text>
+      <text x="31" y="62"  text-anchor="end" font-size="7" fill="#555">50</text>
+      <text x="31" y="13"  text-anchor="end" font-size="7" fill="#555">100</text>
+      <!-- Q1=88% fill=#aed6f1 -->
+      <rect x="46" y="21.8" width="26" height="86.2" fill="#aed6f1" stroke="#85c1e9" stroke-width="0.5"/>
+      <text x="59" y="18.5" text-anchor="middle" font-size="7.5" font-weight="bold" fill="#1a5276">88%</text>
+      <text x="59" y="60"   text-anchor="middle" font-size="6.5" fill="#1a5276">0.99k</text>
+      <text x="59" y="120"  text-anchor="middle" font-size="7.8" fill="#111">Q1</text>
+      <!-- Q2=100% fill=#5dade2 -->
+      <rect x="81" y="10" width="26" height="98" fill="#5dade2" stroke="#3498db" stroke-width="0.5"/>
+      <text x="94" y="7.5" text-anchor="middle" font-size="7.5" font-weight="bold" fill="#1a5276">100%</text>
+      <text x="94" y="59"  text-anchor="middle" font-size="6.5" fill="white">2.6k</text>
+      <text x="94" y="120" text-anchor="middle" font-size="7.8" fill="#111">Q2</text>
+      <!-- Q3=100% fill=#2e86c1 -->
+      <rect x="116" y="10" width="26" height="98" fill="#2e86c1" stroke="#2471a3" stroke-width="0.5"/>
+      <text x="129" y="7.5" text-anchor="middle" font-size="7.5" font-weight="bold" fill="#1a5276">100%</text>
+      <text x="129" y="59"  text-anchor="middle" font-size="6.5" fill="white">13.4k</text>
+      <text x="129" y="120" text-anchor="middle" font-size="7.8" fill="#111">Q3</text>
+      <!-- Q4=68% fill=#1a5276 -->
+      <rect x="151" y="41.4" width="26" height="66.6" fill="#1a5276" stroke="#154360" stroke-width="0.5"/>
+      <text x="164" y="38"  text-anchor="middle" font-size="7.5" font-weight="bold" fill="#1a5276">68%</text>
+      <text x="164" y="78"  text-anchor="middle" font-size="6.5" fill="white">28.8k</text>
+      <text x="164" y="120" text-anchor="middle" font-size="7.8" fill="#111">Q4</text>
+      <text x="109" y="131" text-anchor="middle" font-size="6.5" fill="#666">iter. med. por cuartil (n=25 c/u)</text>
+    </svg>
+  </div>
+
+</div>
+
+<!-- conclusiones -->
+<div class="st" style="margin-top:5px">Conclusiones</div>
+<ul class="concl">
+  <li><strong>Tree reuse produce crecimiento de &gt;500× en iteraciones dentro de la partida</strong>:
+  jugada 1 parte de árbol frío (~300 iter), última jugada alcanza 44 041 iter (gana) o 109 110 iter
+  (pierde) <em>(Fig. 1)</em>. El árbol acumulado convierte cada turno en una búsqueda progresivamente
+  más profunda — ventaja estructural imposible con MCTS de árbol frío.</li>
+  <li><strong>Las curvas de WR convergen rápido y se estabilizan</strong>: Hydra supera el 80 % de
+  WR desde las primeras 10 partidas y no presenta deriva ni degradación a lo largo de las 50
+  <em>(Fig. 2)</em>. La política UCB1 es robusta ante la variación estocástica cross-game.</li>
+  <li><strong>Robustez de rol excepcional</strong>: diferencial 1ro/2do de Hydra = +6 pp, frente a
+  +18 pp (Titan) y +20 pp (Kronos) <em>(Fig. 3)</em>. El árbol reutilizado compensa la desventaja
+  estructural de turno — Hydra conoce el contexto del estado desde el turno anterior.</li>
+  <li><strong>Zona óptima Q2–Q3 (2.6k–13.4k iter), WR = 100 %</strong> <em>(Fig. 4)</em>.
+  Q4 (&gt;28 k iter) cae a 68 %: partidas largas implican que Titan explotó mayor profundidad
+  α-β (6.52 vs 5.56 en ganadas). Confound: mayor iteración ≠ mejor búsqueda cuando el
+  oponente también dispone de más tiempo para refinar su árbol α-β.</li>
+</ul>
+
+<!-- propuestas -->
+<div class="st" style="margin-top:5px">Propuestas de mejora</div>
+<div class="imp"><strong>1. Background MCTS.</strong>
+Mientras el oponente piensa (1.75 s), ejecutar iteraciones MCTS en hilo paralelo
+(<code>threading.Thread</code>). Ataca el cuello de Fig. 1: jugada 1 no partiría de árbol
+frío (~300 iter) sino de un árbol precalentado. Impacto estimado: +500–2 000 iter iniciales
+sin aumentar TIME_LIMIT.</div>
+<div class="imp"><strong>2. Expansión informada.</strong>
+Al expandir nodos, ordenar hijos por <code>_count_threats()</code>. Sesga UCB1 hacia forks
+críticos — exactamente los estados donde Titan (profundidad α-β 6.52 en partidas ganadas)
+supera a Hydra. Costo: una evaluación por nodo expandido, sin alterar backpropagación.</div>
+<div class="imp"><strong>3. Early termination en rollouts.</strong>
+Si <code>_count_threats(board, opp) ≥ 2</code> tras el movimiento rival, retornar −1
+inmediatamente. Propaga señal negativa antes de que el fork sea ejecutable, reduciendo la
+probabilidad UCB1 de movimientos que habilitan doble amenaza — tipo de error que Titan
+explota en los primeros 10–12 movimientos.</div>
+
+</body>
+</html>
