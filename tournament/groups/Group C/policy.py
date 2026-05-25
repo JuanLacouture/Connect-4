@@ -243,6 +243,8 @@ class MCTSAgentTorneo(Policy):
             self._backpropagate(node, result)
             sims += 1
 
+        self.last_iterations = sims
+
         # Elegir el hijo con más visitas (más robusto que el mejor UCB)
         if not root.children:
             # Si nunca se expandió, preferir centro

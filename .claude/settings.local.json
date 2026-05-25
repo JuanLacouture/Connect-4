@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python run_roundrobin.py)",
+      "Bash(Get-Content \"C:\\\\Users\\\\berri\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-berri-Desktop-Universidad-Fundamentos-de-IA-Connect-4\\\\0d2b93ff-7537-4f9e-9f2b-72ade4d1e9b4\\\\tasks\\\\bq6736sh6.output\" -Raw)",
+      "Bash(python -c \"import subprocess; r = subprocess.run\\(['python', 'run_roundrobin.py'], capture_output=False, cwd=r'c:\\\\Users\\\\berri\\\\Desktop\\\\Universidad\\\\Fundamentos de IA\\\\Connect-4\\\\tournament', timeout=10\\); print\\('exit', r.returncode\\)\")",
+      "Bash(tasklist /FI \"IMAGENAME eq python.exe\" /FO LIST)",
+      "Bash(powershell -command \"Get-Process python -ErrorAction SilentlyContinue | Select-Object Id, CPU, WorkingSet, StartTime\")",
+      "Bash(python -u -c ' *)",
+      "Bash(powershell -Command \"Get-Process python -ErrorAction SilentlyContinue | Select-Object Id, CPU, StartTime\")"
+    ]
+  }
+}

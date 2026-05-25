@@ -148,6 +148,7 @@ class MinimaxPolicy(Policy):
         pass
 
     def act(self, s: np.ndarray) -> int:
+        self.last_depth = SEARCH_DEPTH
         board = s.copy()
         me = _infer_me(board)
         opp = -me
