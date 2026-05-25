@@ -107,7 +107,7 @@ def heuristic_rollout(board: np.ndarray, player: int) -> float:
             col = block_col
         else:
             # 3. Jugar aleatoriamente con sesgo al centro
-            weights = [4 - abs(c - 3) for c in free]   # 4,3,4,4,3,4,4 → más peso al centro
+            weights = [5 - abs(c - 3) ** 2 for c in free]   # 4,3,4,4,3,4,4 → más peso al centro
             total = sum(weights)
             r = random.random() * total
             acc = 0
@@ -147,7 +147,7 @@ class MCTSNode:
     def is_fully_expanded(self) -> bool:
         return len(self.untried_moves) == 0
 
-    def ucb_score(self, c: float = 1.414) -> float:
+    def ucb_score(self, c: float = 1.0) -> float:
         if self.visits == 0:
             return float('inf')
         exploitation = self.value / self.visits
@@ -182,7 +182,7 @@ class MCTSAgentTorneo(Policy):
       - act(s): elige la columna a jugar dado el tablero s.
     """
 
-    def __init__(self, simulations: int = 800, time_limit: float = 4.5):
+    def __init__(self, simulations: int = 2000, time_limit: float = 5.5):
         self.simulations = simulations
         self.time_limit = time_limit   # segundos máximos por movimiento
 
