@@ -24,11 +24,15 @@ Arquitectura de 3 capas de prioridad descendente:
 ## Requisitos
 
 - Python 3.8+
-- Dependencias: `numpy`
+- Dependencias del torneo: `numpy`, `pydantic`
 
 Instalar dependencias:
 ```bash
-pip install numpy
+pip install -r tournament/requirements.txt
+```
+o manualmente:
+```bash
+pip install numpy pydantic
 ```
 
 ## Ejecución
