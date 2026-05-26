@@ -21,13 +21,15 @@ Arquitectura de 3 capas de prioridad descendente:
 | `_CENTER_ORDER` | `(3,2,4,1,5,0,6)` | Orden de exploración de columnas (centro primero) |
 | `_TIME_GUARD` | 0.85 s | Tiempo máximo por jugada (red de seguridad) |
 
-## Archivos
+## Requisitos
 
-| Archivo | Descripción |
-|---|---|
-| `policy.py` | Código del agente (`MinimaxPolicy`) |
-| `entrega.ipynb` | Notebook con estudio completo: gate, análisis paramétrico, self-play, propuestas de mejora |
-| `depth_sweep_data.npz` | Datos precalculados del barrido de profundidad (depths 1-8) |
+- Python 3.8+
+- Dependencias: `numpy`
+
+Instalar dependencias:
+```bash
+pip install numpy
+```
 
 ## Ejecución
 
@@ -37,7 +39,15 @@ cd tournament
 python main.py
 ```
 
-El agente se auto-descubre en `tournament/groups/Group B/policy.py`.
+El agente se auto-descubre en `tournament/groups/Group B/policy.py` — no requiere configuración adicional.
+
+## Archivos
+
+| Archivo | Descripción |
+|---|---|
+| `policy.py` | Código del agente (`MinimaxPolicy`) |
+| `entrega.ipynb` | Notebook con estudio completo: gate, análisis paramétrico, self-play, propuestas de mejora |
+| `depth_sweep_data.npz` | Datos precalculados del barrido de profundidad (depths 1-8), requeridos por `entrega.ipynb` |
 
 ## Gate
 
@@ -45,12 +55,24 @@ El agente se auto-descubre en `tournament/groups/Group B/policy.py`.
 - **Winrate ≥ 50%** en ambos colores (Rojo y Amarillo).
 - Cumple para cualquier `SEARCH_DEPTH ≥ 1`.
 
+## Resultado torneo grupal
+
+Round-robin de 150 partidas (50 por par, alternando colores):
+
+| Agente | Puntos | Elo | W | D | L |
+|---|---|---|---|---|---|
+| **Minimax** (este agente) | **62** | **1586** | 57 | 10 | 33 |
+| Hydra (Group A — Lacouture) | 59 | 1563 | 55 | 8 | 37 |
+| MCTSSoler (Group C — Soler) | 29 | 1351 | 25 | 8 | 67 |
+
+Minimax seleccionado como **agente del grupo** para el torneo inter-grupal.
+
 ## Diferenciación
 
-Este agente usa **búsqueda constructiva con heurística de evaluación explícita** (slides 2, 3, 12).
+Este agente usa **búsqueda constructiva con heurística de evaluación explícita**.
 Se diferencia de los otros agentes del grupo:
-- **Group A:** Negamax (variante de Minimax sin heurística de ventanas)
-- **Group C:** Q-Learning con self-play offline (200k episodios, tabla Q)
+- **Group A (Lacouture) — Hydra:** MCTS con UCB1, árbol persistente entre turnos, rollouts heurísticos, TIME_LIMIT=1.75s.
+- **Group C (Soler) — MCTSSoler:** MCTS con UCB1 (C=1.0), sin árbol persistente, 2000 simulaciones máximo.
 
 ## Enlace al código
 

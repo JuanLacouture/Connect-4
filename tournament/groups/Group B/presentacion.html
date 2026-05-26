@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minimax con Poda Alfa-Beta — Andrés Sánchez</title>
+  <style>
+    /* ── Reset & base ── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      height: 100%;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      overflow: hidden;
+    }
+
+    /* ── Slide container ── */
+    .deck {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      padding: 40px 56px;
+      opacity: 0;
+      transition: opacity 0.45s ease;
+    }
+
+    .slide.active {
+      display: flex;
+      opacity: 1;
+    }
+
+    /* ── Backgrounds ── */
+    .slide {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    }
+
+    .slide::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at 20% 50%, rgba(56, 189, 248, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 80%, rgba(99, 102, 241, 0.06) 0%, transparent 50%);
+    }
+
+    /* ── Typography ── */
+    h1 {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: #f8fafc;
+    }
+
+    h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 6px;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+
+    p,
+    li {
+      font-size: 1.05rem;
+      line-height: 1.5;
+      color: #cbd5e1;
+    }
+
+    strong {
+      color: #f8fafc;
+    }
+
+    .accent {
+      color: #38bdf8;
+    }
+
+    .accent-green {
+      color: #4ade80;
+    }
+
+    .accent-orange {
+      color: #fb923c;
+    }
+
+    .accent-red {
+      color: #f87171;
+    }
+
+    .small {
+      font-size: 0.82rem;
+      color: #64748b;
+    }
+
+    /* ── Layout helpers ── */
+    .flex {
+      display: flex;
+      gap: 24px;
+    }
+
+    .flex-1 {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .flex-col {
+      flex-direction: column;
+    }
+
+    .center {
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gap-16 {
+      gap: 16px;
+    }
+
+    .gap-12 {
+      gap: 12px;
+    }
+
+    .gap-8 {
+      gap: 8px;
+    }
+
+    .mb-16 {
+      margin-bottom: 16px;
+    }
+
+    .mb-8 {
+      margin-bottom: 8px;
+    }
+
+    .mt-8 {
+      margin-top: 8px;
+    }
+
+    .mt-16 {
+      margin-top: 16px;
+    }
+
+    .relative {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(56, 189, 248, 0.15);
+      border-radius: 12px;
+      padding: 16px 20px;
+      backdrop-filter: blur(8px);
+    }
+
+    .card-sm {
+      padding: 12px 16px;
+      border-radius: 10px;
+    }
+
+    .card-highlight {
+      border-color: rgba(56, 189, 248, 0.4);
+      background: rgba(56, 189, 248, 0.06);
+    }
+
+    /* ── Tags / chips ── */
+    .tag {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: rgba(56, 189, 248, 0.12);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    .tag-green {
+      background: rgba(74, 222, 128, 0.1);
+      color: #4ade80;
+      border-color: rgba(74, 222, 128, 0.25);
+    }
+
+    .tag-orange {
+      background: rgba(251, 146, 60, 0.1);
+      color: #fb923c;
+      border-color: rgba(251, 146, 60, 0.25);
+    }
+
+    .tag-red {
+      background: rgba(248, 113, 113, 0.1);
+      color: #f87171;
+      border-color: rgba(248, 113, 113, 0.25);
+    }
+
+    /* ── Gate table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+
+    th,
+    td {
+      padding: 8px 14px;
+      text-align: center;
+    }
+
+    th {
+      background: rgba(56, 189, 248, 0.1);
+      color: #38bdf8;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(56, 189, 248, 0.2);
+    }
+
+    td {
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      color: #e2e8f0;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* ── Chart containers ── */
+    .chart-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      border-radius: 10px;
+      padding: 12px;
+      position: relative;
+    }
+
+    /* ── Layer diagram ── */
+    .layer {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      border-left: 4px solid;
+    }
+
+    .layer-1 {
+      background: rgba(74, 222, 128, 0.08);
+      border-color: #4ade80;
+      color: #4ade80;
+    }
+
+    .layer-2 {
+      background: rgba(251, 146, 60, 0.08);
+      border-color: #fb923c;
+      color: #fb923c;
+    }
+
+    .layer-3 {
+      background: rgba(56, 189, 248, 0.08);
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+
+    .layer-num {
+      font-size: 1.4rem;
+      font-weight: 800;
+      min-width: 24px;
+    }
+
+    .layer-desc {
+      color: #cbd5e1;
+      font-weight: 400;
+      font-size: 0.9rem;
+    }
+
+    /* ── Formula ── */
+    .formula {
+      font-family: 'Cambria Math', 'Times New Roman', serif;
+      font-size: 1.3rem;
+      color: #f8fafc;
+      text-align: center;
+      padding: 14px;
+      background: rgba(56, 189, 248, 0.05);
+      border-radius: 8px;
+      border: 1px solid rgba(56, 189, 248, 0.15);
+    }
+
+    /* ── Navigation ── */
+    .nav {
+      position: fixed;
+      bottom: 20px;
+      right: 28px;
+      z-index: 100;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .nav button {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      background: rgba(30, 41, 59, 0.8);
+      color: #94a3b8;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      backdrop-filter: blur(8px);
+    }
+
+    .nav button:hover {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      border-color: #38bdf8;
+    }
+
+    .nav-count {
+      font-size: 0.82rem;
+      color: #64748b;
+      min-width: 44px;
+      text-align: center;
+    }
+
+    /* ── Progress bar ── */
+    .progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: #38bdf8;
+      transition: width 0.4s ease;
+      z-index: 100;
+    }
+
+    /* ── Heatmap ── */
+    .heatmap {
+      display: grid;
+      grid-template-columns: auto repeat(3, 1fr);
+      gap: 4px;
+    }
+
+    .hm-cell {
+      padding: 12px 8px;
+      text-align: center;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+
+    .hm-header {
+      color: #94a3b8;
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 8px;
+    }
+
+    /* ── Improvement cards ── */
+    .improve-card {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      border-radius: 10px;
+      padding: 14px 18px;
+      border-left: 3px solid;
+    }
+
+    .improve-card h3 {
+      margin-bottom: 4px;
+    }
+
+    .improve-card p {
+      font-size: 0.9rem;
+      color: #94a3b8;
+    }
+
+    /* ── Big stat ── */
+    .big-stat {
+      font-size: 3rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(16px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .slide.active .anim {
+      animation: fadeInUp 0.45s ease both;
+    }
+
+    .slide.active .anim-d1 {
+      animation-delay: 0.1s;
+    }
+
+    .slide.active .anim-d2 {
+      animation-delay: 0.2s;
+    }
+
+    .slide.active .anim-d3 {
+      animation-delay: 0.3s;
+    }
+
+    .slide.active .anim-d4 {
+      animation-delay: 0.4s;
+    }
+
+    /* ── Responsive for projector ── */
+    @media (min-width: 1600px) {
+      h1 {
+        font-size: 3.2rem;
+      }
+
+      h2 {
+        font-size: 2.1rem;
+      }
+
+      p,
+      li {
+        font-size: 1.15rem;
+      }
+
+      .slide {
+        padding: 48px 72px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="progress" id="progress"></div>
+
+  <div class="deck" id="deck">
+
+    <!-- ════════════════════════════════════════════════════════════════
+     SLIDE 1 — QUE ES MI AGENTE
+     ════════════════════════════════════════════════════════════════ -->
+    <div class="slide active" id="s1">
+      <div class="relative" style="flex:1; display:flex; flex-direction:column;">
+        <div class="anim" style="margin-bottom: 10px;">
+          <span class="tag">Fundamentos de IA — 2026-1</span>
+          <span class="tag-green tag" style="margin-left:8px;">Group B</span>
+        </div>
+
+        <h1 class="anim anim-d1" style="margin-bottom: 4px;">
+          Minimax con Poda <span class="accent">Alfa-Beta</span>
+        </h1>
+        <p class="anim anim-d2" style="font-size:1.15rem; color:#94a3b8; margin-bottom: 24px;">
+          Agente Connect-4 &mdash; Andr&eacute;s S&aacute;nchez
+        </p>
+
+        <div class="flex gap-16 anim anim-d3" style="flex:1;">
+          <!-- Left: Minimax — 3 layers + theory -->
+          <div style="flex:1.3; display:flex; flex-direction:column; gap:6px;">
+            <h3 style="margin-bottom: 2px; color: #64748b;">ARQUITECTURA DE 3 CAPAS</h3>
+            <div class="layer layer-1" style="padding:8px 14px; margin-bottom:2px;">
+              <span class="layer-num">1</span>
+              <div><strong>Victoria inmediata</strong> <span class="layer-desc">&mdash; &iquest;puedo ganar ahora? O(7)</span></div>
+            </div>
+            <div class="layer layer-2" style="padding:8px 14px; margin-bottom:2px;">
+              <span class="layer-num">2</span>
+              <div><strong>Bloqueo inmediato</strong> <span class="layer-desc">&mdash; &iquest;el rival gana? bloquearlo. O(7)</span></div>
+            </div>
+            <div class="layer layer-3" style="padding:8px 14px; margin-bottom:2px;">
+              <span class="layer-num">3</span>
+              <div><strong>B&uacute;squeda Minimax</strong> <span class="layer-desc">&mdash; explorar &aacute;rbol con poda &alpha;-&beta;</span></div>
+            </div>
+
+            <!-- Minimax theory -->
+            <div class="card card-sm" style="margin-top:4px; padding:10px 14px;">
+              <h3 style="color:#38bdf8; margin-bottom:4px; font-size:0.88rem;">MINIMAX &mdash; Juego de suma cero</h3>
+              <p style="font-size:0.82rem; margin-bottom:6px;">
+                Connect-4 = entorno <strong>determinista, secuencial, competitivo</strong>. Yo maximizo mi utilidad, rival minimiza. DFS con l&iacute;mite de profundidad d.
+              </p>
+              <div class="formula" style="padding:8px; font-size:1.1rem; margin-bottom:6px;">
+                v(s) = max<sub>a</sub> min<sub>s'</sub> v(s')
+              </div>
+              <p style="font-size:0.8rem; color:#94a3b8;">Sin poda: O(b<sup>d</sup>) nodos (b&approx;7). Complejidad exponencial &rarr; necesita optimizaci&oacute;n.</p>
+            </div>
+
+            <!-- Alpha-Beta pruning -->
+            <div class="card card-sm" style="margin-top:2px; padding:10px 14px; border-color:rgba(74,222,128,0.25);">
+              <h3 style="color:#4ade80; margin-bottom:4px; font-size:0.88rem;">PODA ALFA-BETA &mdash; Descarte inteligente</h3>
+              <p style="font-size:0.82rem; margin-bottom:4px;">
+                <strong style="color:#38bdf8;">&alpha;</strong> = mejor valor garantizado para MAX (yo).
+                <strong style="color:#fb923c;">&beta;</strong> = mejor valor garantizado para MIN (rival).
+              </p>
+              <p style="font-size:0.82rem; margin-bottom:4px;">
+                Si &alpha; &ge; &beta; &rarr; <strong class="accent-green">corte</strong>: esa rama <strong>no puede cambiar la decisi&oacute;n</strong> del padre. Se descarta sin alterar el resultado.
+              </p>
+              <p style="font-size:0.82rem;">
+                Con orden &oacute;ptimo (centro primero): <strong>O(b<sup>d</sup>) &rarr; O(b<sup>d/2</sup>)</strong> &mdash; equivale a buscar al <strong class="accent">doble de profundidad</strong>.
+              </p>
+            </div>
+          </div>
+
+          <!-- Right: Other agents + heuristic + differentiation -->
+          <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+            <h3 style="margin-bottom: 4px; color: #64748b;">OTROS AGENTES DESARROLLADOS</h3>
+
+            <!-- MCTS card -->
+            <div class="card card-sm" style="border-color: rgba(168,85,247,0.3); background: rgba(168,85,247,0.04);">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                <span class="tag"
+                  style="background:rgba(168,85,247,0.15); color:#c084fc; border-color:rgba(168,85,247,0.3); font-size:0.75rem;">Agente
+                  B</span>
+                <strong style="color:#c084fc; font-size:0.95rem;">MCTS / UCT</strong>
+                <span class="small">(Clases 10, 13)</span>
+              </div>
+              <div
+                style="font-family:'Cambria Math','Times New Roman',serif; font-size:0.95rem; color:#e2e8f0; padding:4px 8px; background:rgba(168,85,247,0.06); border-radius:6px; text-align:center;">
+                UCT(n) = W<sub>n</sub>/N<sub>n</sub> + C&radic;(ln N<sub>padre</sub> / N<sub>n</sub>)
+              </div>
+              <p style="font-size:0.8rem; color:#94a3b8; margin-top:4px;">3000 simulaciones/turno &middot; Rollouts
+                aleatorios &middot; C = &radic;2</p>
+            </div>
+
+            <!-- Q-Learning card -->
+            <div class="card card-sm" style="border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.04);">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                <span class="tag"
+                  style="background:rgba(251,191,36,0.15); color:#fbbf24; border-color:rgba(251,191,36,0.3); font-size:0.75rem;">Agente
+                  C</span>
+                <strong style="color:#fbbf24; font-size:0.95rem;">Q-Learning</strong>
+                <span class="small">(Clases 6-9, 11)</span>
+              </div>
+              <div
+                style="font-family:'Cambria Math','Times New Roman',serif; font-size:0.95rem; color:#e2e8f0; padding:4px 8px; background:rgba(251,191,36,0.06); border-radius:6px; text-align:center;">
+                Q(s,a) &larr; Q(s,a) + &alpha;[r + &gamma; max<sub>a'</sub> Q(s',a') &minus; Q(s,a)]
+              </div>
+              <p style="font-size:0.8rem; color:#94a3b8; margin-top:4px;">200k episodios self-play &middot; Estado
+                can&oacute;nico base-3 &middot; act() O(1)</p>
+            </div>
+
+            <!-- Heuristic table -->
+            <div class="card card-sm" style="flex:1;">
+              <h3 style="margin-bottom: 4px; color: #64748b; font-size:0.9rem;">HEUR&Iacute;STICA MINIMAX</h3>
+              <table style="font-size:0.8rem;">
+                <tr>
+                  <th style="padding:4px 8px;">Patr&oacute;n (ventana 4)</th>
+                  <th style="padding:4px 8px;">Propio</th>
+                  <th style="padding:4px 8px;">Rival</th>
+                </tr>
+                <tr>
+                  <td style="text-align:left; padding:3px 8px;">3 fichas + 1 vac&iacute;a</td>
+                  <td class="accent-green" style="padding:3px 8px;">+50</td>
+                  <td class="accent-red" style="padding:3px 8px;">&minus;80</td>
+                </tr>
+                <tr>
+                  <td style="text-align:left; padding:3px 8px;">2 fichas + 2 vac&iacute;as</td>
+                  <td class="accent-green" style="padding:3px 8px;">+10</td>
+                  <td class="accent-red" style="padding:3px 8px;">&minus;12</td>
+                </tr>
+                <tr>
+                  <td style="text-align:left; padding:3px 8px;">Columna central</td>
+                  <td class="accent-green" style="padding:3px 8px;">+6</td>
+                  <td class="accent-red" style="padding:3px 8px;">&minus;6</td>
+                </tr>
+              </table>
+              <p class="small" style="margin-top:2px;">&minus;80 vs +50: <strong style="color:#cbd5e1;">bloquear &gt;
+                  atacar</strong></p>
+            </div>
+
+            <!-- Why Minimax -->
+            <div class="card card-sm card-highlight" style="padding:10px 14px;">
+              <p style="font-size: 0.82rem; margin:0;">
+                <strong class="accent">&iquest;Por qu&eacute; Minimax?</strong> Determinista, explicable,
+                heur&iacute;stica transparente.
+                Conceptualmente distinto a compa&ntilde;eros (Negamax, MCTS).
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════
+     SLIDE 2 — GATE + ANALISIS PARAMETRICO
+     ════════════════════════════════════════════════════════════════ -->
+    <div class="slide" id="s2">
+      <div class="relative" style="flex:1; display:flex; flex-direction:column;">
+        <h2 class="anim">Gate + An&aacute;lisis Param&eacute;trico</h2>
+        <p class="anim anim-d1 small mb-8">Variable num&eacute;rica: <strong class="accent">SEARCH_DEPTH</strong>
+          (1&ndash;8) &middot; 100 partidas/color vs aleatorio</p>
+
+        <div class="flex gap-16 anim anim-d2" style="flex:1; min-height:0;">
+          <!-- Left column: Gate + stats -->
+          <div style="width: 260px; flex-shrink:0; display:flex; flex-direction:column; gap:12px;">
+            <div class="card card-sm">
+              <h3 style="color:#64748b; margin-bottom:6px;">GATE (depth=6)</h3>
+              <table style="font-size:0.9rem;">
+                <tr>
+                  <th>Color</th>
+                  <th>W</th>
+                  <th>L</th>
+                  <th>WR</th>
+                </tr>
+                <tr>
+                  <td style="color:#f87171;">Rojo</td>
+                  <td>100</td>
+                  <td class="accent-green">0</td>
+                  <td class="accent-green"><strong>100%</strong></td>
+                </tr>
+                <tr>
+                  <td style="color:#fbbf24;">Amarillo</td>
+                  <td>100</td>
+                  <td class="accent-green">0</td>
+                  <td class="accent-green"><strong>100%</strong></td>
+                </tr>
+              </table>
+              <div style="text-align:center; margin-top:6px;">
+                <span class="tag-green tag">PASS &check;</span>
+              </div>
+            </div>
+
+            <div class="card card-sm" style="flex:1;">
+              <h3 style="color:#64748b; margin-bottom:8px;">HALLAZGOS</h3>
+              <p style="font-size:0.88rem;">
+                <strong class="accent-green">100% winrate</strong> en todas las profundidades (1&ndash;8) vs aleatorio.
+              </p>
+              <p style="font-size:0.88rem; margin-top:8px;">
+                Tiempo crece <strong class="accent-orange">&sim;7&times;</strong> por cada nivel adicional.
+              </p>
+              <p style="font-size:0.88rem; margin-top:8px;">
+                <strong class="accent">depth=6</strong> = punto &oacute;ptimo:<br>
+                2.6s max &lt; time guard potencial.<br>
+                depth=8 &rarr; 47s &mdash; inviable.
+              </p>
+              <p style="font-size:0.88rem; margin-top:8px;">
+                Complejidad: <strong>O(b<sup>d/2</sup>)</strong> con poda &oacute;ptima.
+              </p>
+            </div>
+          </div>
+
+          <!-- Right: Time bar chart (the interesting story) -->
+          <div class="flex-1 flex flex-col gap-8" style="min-width:0;">
+            <div class="chart-box" style="flex:1; min-height:0;">
+              <canvas id="chartTime"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════
+     SLIDE 3 — DOS VERSIONES + SELF-PLAY
+     ════════════════════════════════════════════════════════════════ -->
+    <div class="slide" id="s3">
+      <div class="relative" style="flex:1; display:flex; flex-direction:column;">
+        <h2 class="anim">Dos Versiones + Self-Play</h2>
+        <p class="anim anim-d1 small mb-8">Activar/desactivar capa t&aacute;ctica &middot; Agente vs s&iacute; mismo</p>
+
+        <div class="flex gap-16 anim anim-d2" style="flex:1; min-height:0;">
+          <!-- Left: v1 vs v2 comparison -->
+          <div class="flex-1 flex flex-col gap-12">
+            <div class="flex gap-8">
+              <div class="card card-sm flex-1">
+                <span class="tag" style="margin-bottom:6px; display:inline-block;">v1 &mdash; Con t&aacute;ctica</span>
+                <p style="font-size:0.88rem;">3 capas: victoria + bloqueo + minimax.<br>
+                  Red de seguridad <strong>O(7)</strong>.<br>
+                  <span class="accent-green">0 derrotas en todo depth.</span>
+                </p>
+              </div>
+              <div class="card card-sm flex-1">
+                <span class="tag-orange tag" style="margin-bottom:6px; display:inline-block;">v2 &mdash; Sin
+                  t&aacute;ctica</span>
+                <p style="font-size:0.88rem;">Solo minimax puro.<br>
+                  Depende 100% de profundidad.<br>
+                  <span class="accent-orange">Vulnerable en depth bajo.</span>
+                </p>
+              </div>
+            </div>
+            <div class="chart-box" style="flex:1; min-height:0;">
+              <canvas id="chartVersions"></canvas>
+            </div>
+            <div class="card card-sm">
+              <p style="font-size:0.85rem; margin:0; color:#94a3b8;">
+                <strong class="accent">Insight:</strong> la capa t&aacute;ctica aporta <strong
+                  style="color:#e2e8f0;">robustez a costo despreciable</strong> (O(7) vs O(7<sup>d</sup>)).
+                Cr&iacute;tica en depth &le;2 y contra oponentes que generan amenazas inmediatas.
+              </p>
+            </div>
+          </div>
+
+          <!-- Right: Self-play -->
+          <div style="width: 380px; flex-shrink:0; display:flex; flex-direction:column; gap:12px;">
+            <div class="card card-sm">
+              <h3 style="color:#64748b; margin-bottom:4px;">SELF-PLAY</h3>
+              <p style="font-size:0.85rem; color:#94a3b8;">
+                Agente determinista vs copia id&eacute;ntica.
+                Resultado depende de <strong class="accent">ventaja del primer jugador</strong>.
+              </p>
+            </div>
+            <div class="chart-box" style="flex:1; min-height:0;">
+              <canvas id="chartSelfplay"></canvas>
+            </div>
+            <div class="card card-sm card-highlight">
+              <p style="font-size:0.85rem; color:#cbd5e1; margin:0;">
+                <strong class="accent-red">Rojo gana el 100%</strong> en self-play &rarr; el agente captura la ventaja
+                te&oacute;rica del primer jugador en Connect-4. Resultado determinista: misma partida cada vez.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════
+     SLIDE 4 — DEPTH ASIMETRICO + PROPUESTAS DE MEJORA
+     ════════════════════════════════════════════════════════════════ -->
+    <div class="slide" id="s4">
+      <div class="relative" style="flex:1; display:flex; flex-direction:column;">
+        <h2 class="anim">Depth Asim&eacute;trico + Propuestas de Mejora</h2>
+        <p class="anim anim-d1 small mb-8">Cada nivel de profundidad domina al anterior &middot; Cuellos de botella con
+          evidencia</p>
+
+        <div class="flex gap-16 anim anim-d2" style="flex:1; min-height:0;">
+          <!-- Left: heatmap + round-robin chart -->
+          <div style="width: 340px; flex-shrink:0; display:flex; flex-direction:column; gap:10px;">
+            <div class="card card-sm">
+              <h3 style="color:#64748b; margin-bottom:8px;">WINRATE &mdash; DEPTH vs DEPTH</h3>
+              <div class="heatmap" id="heatmapContainer">
+                <div class="hm-header"></div>
+                <div class="hm-header">d=2</div>
+                <div class="hm-header">d=4</div>
+                <div class="hm-header">d=6</div>
+              </div>
+              <p class="small mt-8" style="text-align:center;">Fila = agente &middot; Columna = oponente</p>
+            </div>
+
+            <div class="chart-box" style="flex:1; min-height:0;">
+              <canvas id="chartRoundRobin"></canvas>
+            </div>
+
+            <div class="card card-sm">
+              <p style="font-size:0.82rem; color:#94a3b8; margin:0;">
+                <strong class="accent">Patr&oacute;n:</strong> cada +2 niveles domina al anterior. M&aacute;s profundidad = mejor juego, motivando las propuestas de mejora.
+              </p>
+            </div>
+          </div>
+
+          <!-- Right: 3 improvement proposals -->
+          <div class="flex-1 flex flex-col gap-10">
+            <div class="improve-card" style="border-color: #38bdf8;">
+              <div class="flex" style="align-items:center; gap:10px; margin-bottom:2px;">
+                <span class="tag">Mejora 1</span>
+                <h3 style="color:#38bdf8; margin:0;">Transposition Table</h3>
+              </div>
+              <p>Cachear posiciones evaluadas &rarr; evitar re-explorar mismos tableros por diferente orden de jugadas.
+              </p>
+              <p class="mt-8"><strong class="accent">Impacto:</strong> +1&ndash;2 niveles de profundidad efectiva en
+                mismo tiempo.</p>
+              <p class="small">Evidencia: tiempo crece &sim;7&times;/nivel (gr&aacute;fica slide 2).</p>
+            </div>
+
+            <div class="improve-card" style="border-color: #fb923c;">
+              <div class="flex" style="align-items:center; gap:10px; margin-bottom:2px;">
+                <span class="tag-orange tag">Mejora 2</span>
+                <h3 style="color:#fb923c; margin:0;">Iterative Deepening + Killer Moves</h3>
+              </div>
+              <p>Buscar 1, 2, &hellip; d. Mejor movimiento de iteraci&oacute;n anterior primero &rarr; orden de poda
+                din&aacute;mico.</p>
+              <p class="mt-8"><strong class="accent-orange">Impacto:</strong> m&aacute;s cortes &alpha;-&beta; &rarr;
+                acercarse a O(b<sup>d/2</sup>) &oacute;ptimo.</p>
+              <p class="small">Evidencia: orden est&aacute;tico suboptimo en medio-juego.</p>
+            </div>
+
+            <div class="improve-card" style="border-color: #4ade80;">
+              <div class="flex" style="align-items:center; gap:10px; margin-bottom:2px;">
+                <span class="tag-green tag">Mejora 3</span>
+                <h3 style="color:#4ade80; margin:0;">Tuning de Heur&iacute;stica (GA)</h3>
+              </div>
+              <p>Algoritmo gen&eacute;tico para evolucionar pesos (+50, &minus;80, +10, &minus;12) mediante self-play.
+                Fitness = winrate.</p>
+              <p class="mt-8"><strong class="accent-green">Impacto:</strong> mejor evaluaci&oacute;n sin costo extra de
+                tiempo.</p>
+              <p class="small">Evidencia: pesos actuales manuales, sin garant&iacute;a de optimalidad.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════
+     SLIDE 5 — GRUPAL: COMPARACION DE AGENTES
+     ════════════════════════════════════════════════════════════════ -->
+    <div class="slide" id="s5">
+      <div class="relative" style="flex:1; display:flex; flex-direction:column;">
+        <div class="anim" style="margin-bottom:6px;">
+          <span class="tag" style="background:rgba(168,85,247,0.15); color:#c084fc; border-color:rgba(168,85,247,0.3);">Slide grupal</span>
+        </div>
+        <h2 class="anim anim-d1">Comparaci&oacute;n de 3 Agentes</h2>
+        <p class="anim anim-d2 small mb-8">Torneo round-robin &middot; 150 partidas (50 por par, alternando colores)</p>
+
+        <div class="flex gap-16 anim anim-d3" style="flex:1; min-height:0;">
+          <!-- Left: agent comparison table -->
+          <div class="flex-1 flex flex-col gap-10">
+            <div class="card card-sm">
+              <table style="font-size:0.88rem;">
+                <tr>
+                  <th style="text-align:left;">Agente</th>
+                  <th>Autor</th>
+                  <th>T&eacute;cnica</th>
+                  <th>Config clave</th>
+                  <th>Determinista</th>
+                </tr>
+                <tr>
+                  <td style="text-align:left;"><strong class="accent">Minimax</strong></td>
+                  <td>S&aacute;nchez</td>
+                  <td>Poda &alpha;-&beta; + heur&iacute;stica</td>
+                  <td>depth=6, time_guard=0.85s</td>
+                  <td class="accent-green">S&iacute;</td>
+                </tr>
+                <tr>
+                  <td style="text-align:left;"><strong style="color:#c084fc;">Hydra</strong></td>
+                  <td>Lacouture</td>
+                  <td>MCTS + UCB1, &aacute;rbol persistente</td>
+                  <td>TIME_LIMIT=1.75s, rollouts heur&iacute;sticos</td>
+                  <td class="accent-orange">No</td>
+                </tr>
+                <tr>
+                  <td style="text-align:left;"><strong style="color:#fbbf24;">MCTSSoler</strong></td>
+                  <td>Soler</td>
+                  <td>MCTS + UCB1 (C=1.0)</td>
+                  <td>2000 sims, time=4.5s, <span class="accent-red">bug: player=-1</span></td>
+                  <td class="accent-orange">No</td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Round-robin results -->
+            <div class="card card-sm">
+              <h3 style="color:#64748b; margin-bottom:8px;">ROUND-ROBIN &mdash; 150 PARTIDAS</h3>
+              <table style="font-size:0.9rem;">
+                <tr>
+                  <th style="text-align:left;">Enfrentamiento</th>
+                  <th>W&ndash;L</th>
+                  <th>Empates</th>
+                </tr>
+                <tr>
+                  <td style="text-align:left;"><strong style="color:#c084fc;">Hydra</strong> vs <strong class="accent">Minimax</strong></td>
+                  <td>24 &ndash; 21</td>
+                  <td>5</td>
+                </tr>
+                <tr>
+                  <td style="text-align:left;"><strong class="accent">Minimax</strong> vs <strong style="color:#fbbf24;">MCTSSoler</strong></td>
+                  <td class="accent-green">36 &ndash; 9</td>
+                  <td>5</td>
+                </tr>
+                <tr>
+                  <td style="text-align:left;"><strong style="color:#c084fc;">Hydra</strong> vs <strong style="color:#fbbf24;">MCTSSoler</strong></td>
+                  <td>31 &ndash; 16</td>
+                  <td>3</td>
+                </tr>
+              </table>
+            </div>
+
+            <div class="card card-sm card-highlight">
+              <p style="font-size:0.85rem; margin:0;">
+                <strong class="accent-green">Ranking por puntos:</strong> <strong class="accent">Minimax 62</strong> &gt; Hydra 59 &gt; MCTSSoler 29 &nbsp;(W=1, D=0.5)
+                <br><strong>Elo:</strong> Minimax 1586 &gt; Hydra 1563 &gt; MCTSSoler 1351 &nbsp;&middot;&nbsp; Todos cumplen gate.
+              </p>
+            </div>
+          </div>
+
+          <!-- Right: visual chart -->
+          <div style="width:400px; flex-shrink:0; display:flex; flex-direction:column; gap:10px;">
+            <div class="chart-box" style="flex:1; min-height:0;">
+              <canvas id="chartGroupRR"></canvas>
+            </div>
+            <div class="card card-sm">
+              <h3 style="color:#64748b; margin-bottom:4px;">AN&Aacute;LISIS</h3>
+              <p style="font-size:0.82rem; margin-bottom:4px;">
+                <strong class="accent">Minimax:</strong> 1&deg; por puntos. Domina MCTSSoler (36-9). Pierde H2H vs Hydra por 3, pero gana en consistencia total.
+              </p>
+              <p style="font-size:0.82rem; margin-bottom:4px;">
+                <strong style="color:#c084fc;">Hydra:</strong> &aacute;rbol persistente + rollouts heur&iacute;sticos. Gana H2H vs Minimax pero acumula menos puntos totales.
+              </p>
+              <p style="font-size:0.82rem;">
+                <strong style="color:#fbbf24;">MCTSSoler:</strong> Bug cr&iacute;tico (player hardcodeado a -1) limita rendimiento. Sin &aacute;rbol persistente.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════
+     SLIDE 6 — GRUPAL: AGENTE GANADOR
+     ════════════════════════════════════════════════════════════════ -->
+    <div class="slide" id="s6">
+      <div class="relative" style="flex:1; display:flex; flex-direction:column;">
+        <div class="anim" style="margin-bottom:6px;">
+          <span class="tag" style="background:rgba(168,85,247,0.15); color:#c084fc; border-color:rgba(168,85,247,0.3);">Slide grupal</span>
+          <span class="tag-green tag" style="margin-left:8px;">Agente del torneo</span>
+        </div>
+        <h2 class="anim anim-d1">Agente Ganador: <span style="color:#f8fafc;">Minimax &alpha;-&beta;</span> <span style="color:#4ade80; font-size:0.7em;">&mdash; 1&deg; lugar</span></h2>
+        <p class="anim anim-d2 small mb-8">Gan&oacute; el round-robin grupal por puntos (62 pts) &middot; Elo 1586 &middot; Seleccionado para el torneo</p>
+
+        <div class="flex gap-16 anim anim-d3" style="flex:1; min-height:0;">
+          <!-- Left: Why it won + tournament config -->
+          <div class="flex-1 flex flex-col gap-10">
+            <div class="card card-sm" style="border-color:rgba(74,222,128,0.3);">
+              <h3 style="color:#4ade80; margin-bottom:8px;">&iquest;POR QU&Eacute; MINIMAX PARA EL TORNEO?</h3>
+              <div style="display:flex; gap:12px; margin-bottom:8px;">
+                <div style="flex:1; padding:10px; background:rgba(74,222,128,0.06); border-radius:8px; border-left:3px solid #4ade80;">
+                  <strong style="color:#4ade80; font-size:0.9rem;">Determinismo</strong>
+                  <p style="font-size:0.8rem; margin-top:2px;">Misma posici&oacute;n &rarr; misma jugada. Sin varianza de semilla aleatoria. Reproducible.</p>
+                </div>
+                <div style="flex:1; padding:10px; background:rgba(56,189,248,0.06); border-radius:8px; border-left:3px solid #38bdf8;">
+                  <strong style="color:#38bdf8; font-size:0.9rem;">Explicabilidad</strong>
+                  <p style="font-size:0.8rem; margin-top:2px;">Cada jugada se puede rastrear: heur&iacute;stica &rarr; poda &rarr; decisi&oacute;n. Transparente.</p>
+                </div>
+              </div>
+              <div style="display:flex; gap:12px;">
+                <div style="flex:1; padding:10px; background:rgba(251,146,60,0.06); border-radius:8px; border-left:3px solid #fb923c;">
+                  <strong style="color:#fb923c; font-size:0.9rem;">Robustez</strong>
+                  <p style="font-size:0.8rem; margin-top:2px;">Capa t&aacute;ctica O(7) nunca falla en situaciones cr&iacute;ticas. 0 derrotas en &gt;1000 partidas.</p>
+                </div>
+                <div style="flex:1; padding:10px; background:rgba(168,85,247,0.06); border-radius:8px; border-left:3px solid #a855f7;">
+                  <strong style="color:#a855f7; font-size:0.9rem;">Margen de mejora</strong>
+                  <p style="font-size:0.8rem; margin-top:2px;">Transposition table + iterative deepening = +2 niveles de profundidad. Camino claro.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="card card-sm">
+              <h3 style="color:#64748b; margin-bottom:6px;">CONFIGURACI&Oacute;N TORNEO</h3>
+              <table style="font-size:0.88rem;">
+                <tr><td style="text-align:left; color:#94a3b8;">Clase</td><td><strong>MinimaxPolicy</strong></td></tr>
+                <tr><td style="text-align:left; color:#94a3b8;">SEARCH_DEPTH</td><td><strong class="accent">6</strong></td></tr>
+                <tr><td style="text-align:left; color:#94a3b8;">Orden de movimientos</td><td>Centro primero (3,2,4,1,5,0,6)</td></tr>
+                <tr><td style="text-align:left; color:#94a3b8;">Heur&iacute;stica</td><td>Asim&eacute;trica defensiva (+50/&minus;80)</td></tr>
+                <tr><td style="text-align:left; color:#94a3b8;">Time guard</td><td>850 ms</td></tr>
+              </table>
+            </div>
+          </div>
+
+          <!-- Right: summary stats -->
+          <div style="width:360px; flex-shrink:0; display:flex; flex-direction:column; gap:10px;">
+            <div class="card card-sm" style="text-align:center; padding:20px;">
+              <p class="stat-label">WINRATE VS ALEATORIO</p>
+              <p class="big-stat accent-green" style="margin:4px 0;">100%</p>
+              <p class="small">200 partidas (100 Rojo + 100 Amarillo) &middot; 0 derrotas</p>
+            </div>
+            <div class="card card-sm" style="text-align:center; padding:16px;">
+              <p class="stat-label">TORNEO GRUPAL (150 partidas)</p>
+              <p class="big-stat accent-green" style="margin:4px 0; font-size:2.2rem;">57W &ndash; 33L &ndash; 10D</p>
+              <p class="small"><strong class="accent-green">1&deg; en puntos (62 pts)</strong> &middot; Elo 1586 &middot; GANADOR del grupo</p>
+            </div>
+            <div class="chart-box" style="flex:1; min-height:0;">
+              <canvas id="chartTournamentGate"></canvas>
+            </div>
+            <div class="card card-sm card-highlight" style="text-align:center;">
+              <p style="font-size:0.9rem; margin:0;">
+                <strong class="accent-green">Ganador del grupo &mdash; listo para el torneo</strong>
+                <br><span class="small">Gate &check; &middot; 62 pts &check; &middot; Elo 1586 &check; &middot; Determinista &check; &middot; Robusto &check;</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /deck -->
+
+  <!-- Navigation -->
+  <div class="nav">
+    <button onclick="prev()" id="btnPrev">&larr;</button>
+    <span class="nav-count" id="navCount">1 / 6</span>
+    <button onclick="next()" id="btnNext">&rarr;</button>
+  </div>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+  <script>
+    // ══════════════════════════════════════════════════════════
+    // SLIDE NAVIGATION (with lazy chart init)
+    // ══════════════════════════════════════════════════════════
+    const slides = document.querySelectorAll('.slide');
+    const total = slides.length;
+    let cur = 0;
+    const initialized = new Set([0]); // slide 0 visible at load
+
+    function goTo(n) {
+      if (n < 0 || n >= total) return;
+      slides[cur].classList.remove('active');
+      cur = n;
+      slides[cur].classList.add('active');
+      document.getElementById('navCount').textContent = `${cur + 1} / ${total}`;
+      document.getElementById('progress').style.width = `${((cur + 1) / total) * 100}%`;
+      // Lazy init charts when slide becomes visible
+      if (!initialized.has(cur)) {
+        initialized.add(cur);
+        setTimeout(() => initSlideCharts(cur), 50);
+      }
+    }
+    function next() { goTo(cur + 1); }
+    function prev() { goTo(cur - 1); }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+      if (e.key === 'Home') { e.preventDefault(); goTo(0); }
+      if (e.key === 'End') { e.preventDefault(); goTo(total - 1); }
+      if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+        else document.exitFullscreen();
+      }
+    });
+
+    document.getElementById('progress').style.width = `${(1 / total) * 100}%`;
+
+    // ══════════════════════════════════════════════════════════
+    // CHART DEFAULTS
+    // ══════════════════════════════════════════════════════════
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.borderColor = 'rgba(148,163,184,0.1)';
+    Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+    // ══════════════════════════════════════════════════════════
+    // DATA
+    // ══════════════════════════════════════════════════════════
+    const depths = [1, 2, 3, 4, 5, 6, 7, 8];
+    const times = [2, 8, 22, 141, 546, 2596, 10844, 47046]; // ms
+
+    // ══════════════════════════════════════════════════════════
+    // LAZY CHART INITIALIZATION
+    // ══════════════════════════════════════════════════════════
+    function initSlideCharts(slideIndex) {
+      if (slideIndex === 1) initSlide2();
+      if (slideIndex === 2) initSlide3();
+      if (slideIndex === 3) initSlide4();
+      if (slideIndex === 4) initSlide5();
+      if (slideIndex === 5) initSlide6();
+    }
+
+    // Slide 2 starts visible only when navigated to — init on load for slide 1 (no chart)
+    // Init slide 2 chart lazily
+    function initSlide2() {
+      new Chart(document.getElementById('chartTime').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: depths.map(d => 'd=' + d),
+          datasets: [{
+            label: 'Tiempo maximo por jugada (ms)',
+            data: times,
+            backgroundColor: depths.map(d =>
+              d === 6 ? 'rgba(56,189,248,0.7)' :
+                d <= 5 ? 'rgba(74,222,128,0.5)' :
+                  'rgba(248,113,113,0.5)'
+            ),
+            borderColor: depths.map(d =>
+              d === 6 ? '#38bdf8' :
+                d <= 5 ? '#4ade80' :
+                  '#f87171'
+            ),
+            borderWidth: 2,
+            borderRadius: 6,
+            barPercentage: 0.7,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Costo computacional: Tiempo maximo por jugada vs SEARCH_DEPTH',
+              color: '#e2e8f0',
+              font: { size: 14, weight: '600' },
+              padding: { bottom: 16 }
+            },
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const ms = ctx.raw;
+                  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+                },
+                afterLabel: ctx => {
+                  const i = ctx.dataIndex;
+                  if (i > 0) {
+                    const ratio = (times[i] / times[i - 1]).toFixed(1);
+                    return `${ratio}x vs depth=${depths[i - 1]}`;
+                  }
+                  return '';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 13, weight: '600' } }
+            },
+            y: {
+              type: 'logarithmic',
+              title: { display: true, text: 'Tiempo (ms, escala log)', color: '#94a3b8', font: { size: 12 } },
+              ticks: {
+                color: '#94a3b8',
+                font: { size: 11 },
+                callback: v => {
+                  if ([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 50000].includes(v))
+                    return v >= 1000 ? (v / 1000) + 's' : v + 'ms';
+                  return '';
+                }
+              },
+              grid: { color: 'rgba(148,163,184,0.08)' }
+            }
+          }
+        }
+      });
+    }
+
+    // Init slide 3 charts lazily
+    function initSlide3() {
+      const v1_times = [2, 8, 22, 141, 546, 2596, 10844, 47046];
+      const v2_times = [3, 10, 28, 165, 610, 2780, 11200, 48500];
+
+      new Chart(document.getElementById('chartVersions').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: depths.map(d => 'd=' + d),
+          datasets: [
+            {
+              label: 'v1 (con tactica)',
+              data: v1_times,
+              backgroundColor: 'rgba(56,189,248,0.6)',
+              borderColor: '#38bdf8',
+              borderWidth: 1.5,
+              borderRadius: 4,
+              barPercentage: 0.8,
+            },
+            {
+              label: 'v2 (sin tactica)',
+              data: v2_times,
+              backgroundColor: 'rgba(251,146,60,0.5)',
+              borderColor: '#fb923c',
+              borderWidth: 1.5,
+              borderRadius: 4,
+              barPercentage: 0.8,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Tiempo max/jugada: v1 vs v2 (ambas 100% WR vs aleatorio)',
+              color: '#e2e8f0',
+              font: { size: 12, weight: '600' },
+              padding: { bottom: 8 }
+            },
+            legend: { position: 'top', labels: { padding: 10, usePointStyle: true, pointStyle: 'rect', font: { size: 10 } } },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const ms = ctx.raw;
+                  return ctx.dataset.label + ': ' + (ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : ms + 'ms');
+                }
+              }
+            }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+            y: {
+              type: 'logarithmic',
+              title: { display: true, text: 'Tiempo (ms, log)', color: '#94a3b8', font: { size: 11 } },
+              ticks: {
+                color: '#94a3b8', font: { size: 10 },
+                callback: v => {
+                  if ([1, 5, 10, 50, 100, 500, 1000, 5000, 10000, 50000].includes(v))
+                    return v >= 1000 ? (v / 1000) + 's' : v + 'ms';
+                  return '';
+                }
+              },
+              grid: { color: 'rgba(148,163,184,0.06)' }
+            }
+          }
+        }
+      });
+
+      new Chart(document.getElementById('chartSelfplay').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: ['d=2', 'd=4', 'd=6', 'd=8'],
+          datasets: [
+            {
+              label: 'Rojo gana',
+              data: [20, 20, 20, 20],
+              backgroundColor: 'rgba(248,113,113,0.8)',
+              borderColor: '#f87171',
+              borderWidth: 1.5,
+              borderRadius: 4,
+              barPercentage: 0.6,
+            },
+            {
+              label: 'Empate',
+              data: [0, 0, 0, 0],
+              backgroundColor: 'rgba(148,163,184,0.4)',
+              borderColor: '#94a3b8',
+              borderWidth: 1,
+              borderRadius: 4,
+              barPercentage: 0.6,
+            },
+            {
+              label: 'Amarillo gana',
+              data: [0, 0, 0, 0],
+              backgroundColor: 'rgba(251,191,36,0.7)',
+              borderColor: '#fbbf24',
+              borderWidth: 1,
+              borderRadius: 4,
+              barPercentage: 0.6,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Self-play: Minimax vs Minimax',
+              color: '#e2e8f0',
+              font: { size: 12, weight: '600' },
+              padding: { bottom: 4 }
+            },
+            subtitle: {
+              display: true,
+              text: '20 partidas por profundidad',
+              color: '#64748b',
+              font: { size: 10 },
+              padding: { bottom: 4 }
+            },
+            legend: { position: 'top', labels: { padding: 8, usePointStyle: true, pointStyle: 'rect', font: { size: 10 } } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 11, weight: '600' } } },
+            y: {
+              min: 0, max: 24,
+              title: { display: true, text: 'Partidas', color: '#94a3b8', font: { size: 11 } },
+              grid: { color: 'rgba(148,163,184,0.06)' },
+              ticks: { stepSize: 5 }
+            }
+          }
+        }
+      });
+    }
+
+    // Init slide 4: round-robin chart
+    function initSlide4() {
+      new Chart(document.getElementById('chartRoundRobin').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: ['Minimax', 'MCTS', 'Q-Learning'],
+          datasets: [
+            {
+              label: 'Victorias',
+              data: [5, 6, 0],
+              backgroundColor: ['rgba(56,189,248,0.7)', 'rgba(168,85,247,0.7)', 'rgba(251,191,36,0.7)'],
+              borderColor: ['#38bdf8', '#a855f7', '#fbbf24'],
+              borderWidth: 1.5,
+              borderRadius: 4,
+              barPercentage: 0.5,
+            },
+            {
+              label: 'Derrotas',
+              data: [2, 1, 8],
+              backgroundColor: ['rgba(248,113,113,0.5)', 'rgba(248,113,113,0.5)', 'rgba(248,113,113,0.5)'],
+              borderColor: '#f87171',
+              borderWidth: 1,
+              borderRadius: 4,
+              barPercentage: 0.5,
+            },
+            {
+              label: 'Empates',
+              data: [1, 1, 0],
+              backgroundColor: ['rgba(148,163,184,0.4)', 'rgba(148,163,184,0.4)', 'rgba(148,163,184,0.4)'],
+              borderColor: '#94a3b8',
+              borderWidth: 1,
+              borderRadius: 4,
+              barPercentage: 0.5,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: 'y',
+          plugins: {
+            title: {
+              display: true,
+              text: 'Round-Robin: 3 agentes (4 partidas/par)',
+              color: '#e2e8f0',
+              font: { size: 11, weight: '600' },
+              padding: { bottom: 6 }
+            },
+            legend: { position: 'top', labels: { padding: 6, usePointStyle: true, pointStyle: 'rect', font: { size: 9 } } }
+          },
+          scales: {
+            x: {
+              stacked: true,
+              grid: { color: 'rgba(148,163,184,0.06)' },
+              ticks: { stepSize: 2, font: { size: 10 } },
+              title: { display: true, text: 'Partidas', color: '#64748b', font: { size: 9 } }
+            },
+            y: {
+              stacked: true,
+              grid: { display: false },
+              ticks: { font: { size: 11, weight: '600' }, color: ['#38bdf8', '#a855f7', '#fbbf24'] }
+            }
+          }
+        }
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Init slide 5: Group round-robin chart
+    function initSlide5() {
+      new Chart(document.getElementById('chartGroupRR').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: ['Minimax', 'Hydra', 'MCTSSoler'],
+          datasets: [
+            {
+              label: 'Victorias',
+              data: [57, 55, 25],
+              backgroundColor: ['rgba(56,189,248,0.75)', 'rgba(168,85,247,0.75)', 'rgba(251,191,36,0.75)'],
+              borderColor: ['#38bdf8', '#a855f7', '#fbbf24'],
+              borderWidth: 1.5,
+              borderRadius: 6,
+              barPercentage: 0.6,
+            },
+            {
+              label: 'Derrotas',
+              data: [33, 37, 67],
+              backgroundColor: 'rgba(248,113,113,0.6)',
+              borderColor: '#f87171',
+              borderWidth: 1,
+              borderRadius: 6,
+              barPercentage: 0.6,
+            },
+            {
+              label: 'Empates',
+              data: [10, 8, 8],
+              backgroundColor: 'rgba(148,163,184,0.5)',
+              borderColor: '#94a3b8',
+              borderWidth: 1,
+              borderRadius: 6,
+              barPercentage: 0.6,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Torneo Round-Robin: 150 partidas (50 por par)',
+              color: '#e2e8f0',
+              font: { size: 13, weight: '600' },
+              padding: { bottom: 10 }
+            },
+            legend: { position: 'top', labels: { padding: 10, usePointStyle: true, pointStyle: 'rect', font: { size: 10 } } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 12, weight: '600' } } },
+            y: {
+              min: 0, max: 75,
+              title: { display: true, text: 'Partidas', color: '#94a3b8', font: { size: 11 } },
+              grid: { color: 'rgba(148,163,184,0.06)' },
+              ticks: { stepSize: 10 }
+            }
+          }
+        }
+      });
+    }
+
+    // Init slide 6: Tournament gate comparison
+    function initSlide6() {
+      new Chart(document.getElementById('chartTournamentGate').getContext('2d'), {
+        type: 'radar',
+        data: {
+          labels: ['Winrate Torneo', 'Puntos', 'Elo', 'Determinismo', 'Explicabilidad'],
+          datasets: [
+            {
+              label: 'Minimax (62 pts)',
+              data: [57, 100, 100, 100, 100],
+              backgroundColor: 'rgba(56,189,248,0.15)',
+              borderColor: '#38bdf8',
+              borderWidth: 2,
+              pointBackgroundColor: '#38bdf8',
+              pointRadius: 4,
+            },
+            {
+              label: 'Hydra (59 pts)',
+              data: [55, 95, 90, 20, 30],
+              backgroundColor: 'rgba(168,85,247,0.1)',
+              borderColor: '#a855f7',
+              borderWidth: 1.5,
+              pointBackgroundColor: '#a855f7',
+              pointRadius: 3,
+              borderDash: [4, 3],
+            },
+            {
+              label: 'MCTSSoler (29 pts)',
+              data: [25, 47, 30, 20, 30],
+              backgroundColor: 'rgba(251,191,36,0.08)',
+              borderColor: '#fbbf24',
+              borderWidth: 1.5,
+              pointBackgroundColor: '#fbbf24',
+              pointRadius: 3,
+              borderDash: [4, 3],
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Perfil comparativo — Torneo grupal',
+              color: '#e2e8f0',
+              font: { size: 12, weight: '600' },
+              padding: { bottom: 6 }
+            },
+            legend: { position: 'top', labels: { padding: 8, usePointStyle: true, pointStyle: 'circle', font: { size: 10 } } }
+          },
+          scales: {
+            r: {
+              min: 0, max: 100,
+              ticks: { display: false },
+              grid: { color: 'rgba(148,163,184,0.12)' },
+              angleLines: { color: 'rgba(148,163,184,0.1)' },
+              pointLabels: { color: '#94a3b8', font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    // HEATMAP (manual DOM)
+    // ══════════════════════════════════════════════════════════
+    const hm = document.getElementById('heatmapContainer');
+    const mData = [
+      [50, 0, 0],
+      [100, 50, 0],
+      [100, 100, 50]
+    ];
+    const dLabels = ['d=2', 'd=4', 'd=6'];
+
+    function hmColor(v) {
+      if (v >= 80) return 'rgba(74,222,128,0.35)';
+      if (v === 50) return 'rgba(148,163,184,0.12)';
+      if (v > 0 && v < 50) return 'rgba(251,191,36,0.15)';
+      return 'rgba(248,113,113,0.3)';
+    }
+    function hmText(v) {
+      if (v >= 70) return '#4ade80';
+      if (v === 50) return '#94a3b8';
+      return '#f87171';
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const rl = document.createElement('div');
+      rl.className = 'hm-header';
+      rl.style.fontWeight = '700';
+      rl.textContent = dLabels[i];
+      hm.appendChild(rl);
+      for (let j = 0; j < 3; j++) {
+        const cell = document.createElement('div');
+        cell.className = 'hm-cell';
+        const v = mData[i][j];
+        cell.style.background = hmColor(v);
+        cell.style.color = hmText(v);
+        cell.textContent = v + '%';
+        hm.appendChild(cell);
+      }
+    }
+  </script>
+
+</body>
+
+</html>

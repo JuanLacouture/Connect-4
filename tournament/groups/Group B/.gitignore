@@ -3,3 +3,7 @@ __pycache__/
 *.docx
 build_pdf.py
 *.png
+cached_results.json
+depth_sweep_data.npz
+guion_presentacion.md
+
